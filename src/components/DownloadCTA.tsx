@@ -32,7 +32,7 @@ export default function DownloadCTA({ dict }: DownloadCTAProps) {
         </p>
 
         <a
-          href="#"
+          href="https://github.com/yusagil/nokka-web/releases/download/v1.0.0/Nokka.dmg"
           className="mx-auto inline-flex h-14 items-center gap-2 rounded-full bg-[--color-accent] px-8 text-lg font-medium text-white transition-colors duration-150 hover:bg-[--color-accent-hover]"
         >
           <svg

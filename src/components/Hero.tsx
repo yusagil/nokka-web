@@ -46,7 +46,7 @@ export default function Hero({ dict }: HeroProps) {
         {dict.subheadline}
       </p>
       <a
-        href="#download"
+        href="https://github.com/yusagil/nokka-web/releases/download/v1.0.0/Nokka.dmg"
         className="mt-10 inline-flex items-center justify-center gap-2 h-12 px-8 text-base font-medium text-white bg-[--color-accent] hover:bg-[--color-accent-hover] rounded-full transition-colors duration-[--duration-normal] focus-visible:outline-2 focus-visible:outline-[--color-accent] focus-visible:outline-offset-2"
         style={fadeStyle(300)}
       >
