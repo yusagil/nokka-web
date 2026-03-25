@@ -1,0 +1,147 @@
+{
+  "meta": {
+    "title": "Nokka — Mac용 화면 녹화 앱",
+    "description": "Nokka는 무료 네이티브 macOS 화면 녹화 앱입니다. 전체 화면, 특정 윈도우, 원하는 영역을 시스템 오디오와 함께 녹화하세요. 로컬 MP4 파일로 저장됩니다. 계정 불필요, 클라우드 없음.",
+    "ogAlt": "Nokka — Mac용 화면 녹화 앱"
+  },
+  "skipToContent": "본문으로 건너뛰기",
+  "nav": {
+    "features": "기능",
+    "download": "다운로드"
+  },
+  "hero": {
+    "headline": "내 화면. 내 녹화. 내 Mac.",
+    "subheadline": "무료 네이티브 macOS 화면 녹화 앱. 전체 화면, 윈도우, 원하는 영역을 시스템 오디오와 함께 녹화하세요. 로컬 파일 저장, 계정 불필요, 클라우드 없음.",
+    "cta": "macOS용 다운로드",
+    "requirements": "무료 \u00b7 macOS 14+ \u00b7 Apple Silicon & Intel",
+    "screenshotAlt": "Nokka 메인 스크린샷"
+  },
+  "valueProps": {
+    "heading": "왜 Nokka인가요",
+    "ownIt": {
+      "title": "내 것으로",
+      "description": "모든 녹화는 MP4 파일로 Mac에 바로 저장됩니다. 클라우드 업로드 없음, 계정 불필요, 접근을 차단할 수 있는 플랫폼도 없습니다. 내가 참여한 것은 내가 소유해야 합니다."
+    },
+    "controlIt": {
+      "title": "내가 통제",
+      "description": "녹화 모드를 선택하세요. 전체 화면, 특정 윈도우, 또는 드래그로 원하는 영역을 지정할 수 있습니다. 원하는 것만 정확히 녹화하세요."
+    },
+    "forgetIt": {
+      "title": "잊어버려도 OK",
+      "description": "Nokka는 최소한의 플로팅 바와 함께 백그라운드에서 녹화합니다. 앱을 전환하고, 문서를 찾아보고, 코드를 작성하세요 — 녹화는 지정한 대로 정확히 캡처됩니다."
+    }
+  },
+  "featureShowcase": {
+    "heading": "세 가지 녹화 방식",
+    "tablistLabel": "녹화 모드",
+    "screenshotPrefix": "스크린샷",
+    "tabs": {
+      "fullScreen": {
+        "label": "전체 화면",
+        "title": "전부 다. 빠짐없이.",
+        "description": "클릭 한 번으로 전체 디스플레이를 원본 해상도로 캡처합니다. 가장 간단한 녹화 방식 — 결정도, 설정도 필요 없습니다. 보이는 그대로의 화면입니다.",
+        "bullets": [
+          "네이티브 디스플레이 해상도로 캡처",
+          "\u2318\u21e7R로 바로 시작"
+        ]
+      },
+      "regionSelect": {
+        "label": "영역 선택",
+        "title": "사각형을 그려서 안쪽을 녹화합니다.",
+        "description": "클릭하고 드래그해서 녹화 영역을 지정하세요. 핸들로 크기를 조절하고, 실시간으로 크기를 확인할 수 있습니다. 튜토리얼, 특정 앱 영역, 소셜 미디어 규격에 적합합니다.",
+        "bullets": [
+          "크기 조절 핸들 지원",
+          "실시간 크기 표시 (W \u00d7 H px)",
+          "최소 200\u00d7150 픽셀"
+        ]
+      },
+      "windowCapture": {
+        "label": "윈도우 캡처",
+        "title": "윈도우를 선택하세요. 아무 윈도우든.",
+        "description": "시각적 그리드에서 특정 앱 윈도우를 선택하세요 — 다른 Space에 있거나 전체 화면으로 실행 중이어도 됩니다. 다른 앱에서 작업하면서 해당 앱을 녹화하세요.",
+        "bullets": [
+          "Space 및 전체 화면 앱 간 전환 지원",
+          "시스템 UI 자동 필터링",
+          "실시간 윈도우 썸네일"
+        ]
+      }
+    }
+  },
+  "featuresGrid": {
+    "heading": "필요한 것만. 그 이상은 없습니다.",
+    "features": {
+      "systemAudio": {
+        "title": "시스템 오디오 + 마이크",
+        "description": "시스템 사운드와 마이크를 별도 트랙으로 캡처합니다. 들리는 소리와 말하는 소리를 모두 녹음하세요."
+      },
+      "pauseResume": {
+        "title": "일시정지 & 재개",
+        "description": "갑자기 방해가 들어와도 괜찮습니다. 녹화를 일시정지하고, 처리한 뒤, 정확히 그 지점에서 다시 시작하세요."
+      },
+      "globalShortcuts": {
+        "title": "글로벌 단축키",
+        "description": "\u2318\u21e7R로 녹화. \u2318\u21e7P로 일시정지. \u2318\u21e7M으로 마이크 토글. 어디서든 작동하며, 창을 전환할 필요가 없습니다."
+      },
+      "menuBarApp": {
+        "title": "메뉴 바 앱",
+        "description": "메뉴 바에 상주합니다. 클릭하면 바로 시작. Dock 아이콘도, 창 어수선함도, 설정 절차도 없습니다."
+      },
+      "floatingControlBar": {
+        "title": "플로팅 컨트롤 바",
+        "description": "최소한의 알약 모양 바가 녹화 중에 표시됩니다. 필요 없을 때는 최소화할 수 있습니다."
+      },
+      "countdownTimer": {
+        "title": "카운트다운 타이머",
+        "description": "녹화 시작 전 설정 가능한 카운트다운. 올바른 앱으로 전환할 충분한 시간을 확보하세요."
+      },
+      "h264": {
+        "title": "H.264 하드웨어 가속",
+        "description": "하드웨어 가속 MP4 인코딩. CPU에 부담 없이 부드럽게 녹화합니다."
+      },
+      "macosNative": {
+        "title": "macOS 네이티브",
+        "description": "SwiftUI와 ScreenCaptureKit으로 개발되었습니다. Electron도, 웹 래퍼도 없습니다. Mac에 딱 어울리는 앱입니다."
+      }
+    }
+  },
+  "comparison": {
+    "heading": "다른 것들도 써 보셨죠.",
+    "items": {
+      "loom": {
+        "name": "vs. Loom",
+        "description": "Loom은 팀과 녹화를 공유하기에 좋습니다. 하지만 계정이 필요하고, 모든 것을 클라우드에 업로드하며, 녹화 중 일시정지가 안 됩니다. 로컬 파일과 더 많은 녹화 제어를 원한다면, Nokka가 더 간단합니다."
+      },
+      "obs": {
+        "name": "vs. OBS",
+        "description": "OBS는 전문 방송 도구입니다. 거의 모든 것을 할 수 있습니다 — 배울 의지가 있다면요. Mac에서 간단히 화면을 녹화하려면, 편의점 가는데 대형 트럭을 몰고 가는 셈입니다."
+      },
+      "quicktime": {
+        "name": "vs. QuickTime",
+        "description": "QuickTime은 기본 탑재되어 있고 무료입니다. 하지만 우회 방법 없이는 시스템 오디오를 녹음할 수 없고, 영역 선택을 지원하지 않으며, 컨트롤이 파일 메뉴 속에 숨겨져 있습니다. 되다가 안 되는 도구입니다."
+      },
+      "builtIn": {
+        "name": "vs. macOS 기본 도구 (\u2318\u21e75)",
+        "description": "기본 도구 모음은 편리하지만 제한적입니다. 시스템 오디오 캡처 없음, 기본적인 컨트롤, 일시정지/재개 없음. 간단한 스크린샷에는 괜찮지만, 제대로 된 녹화 작업에는 부족합니다."
+      }
+    }
+  },
+  "trustBadges": {
+    "badges": [
+      "Swift로 개발",
+      "~5 MB",
+      "분석 수집 없음",
+      "100% 로컬"
+    ]
+  },
+  "downloadCta": {
+    "heading": "녹화할 준비 되셨나요?",
+    "subheading": "Nokka를 다운로드하고 몇 초 만에 녹화를 시작하세요.",
+    "cta": "macOS용 다운로드",
+    "requirements": "macOS 14 Sonoma 이상 \u00b7 Apple Silicon & Intel \u00b7 ~5 MB"
+  },
+  "footer": {
+    "copyright": "\u00a9 2026",
+    "releaseNotes": "릴리스 노트",
+    "contact": "문의"
+  }
+}

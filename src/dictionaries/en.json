@@ -1,0 +1,147 @@
+{
+  "meta": {
+    "title": "Nokka — Screen Recording for Mac",
+    "description": "Nokka is a free, native macOS screen recorder. Record your full screen, a specific window, or any region with system audio. Local MP4 files. No account, no cloud, no complexity.",
+    "ogAlt": "Nokka — Screen Recording for Mac"
+  },
+  "skipToContent": "Skip to content",
+  "nav": {
+    "features": "Features",
+    "download": "Download"
+  },
+  "hero": {
+    "headline": "Your screen. Your recording. Your Mac.",
+    "subheadline": "A free, native macOS screen recorder. Capture your full screen, a window, or any region — with system audio. Local files, no account, no cloud.",
+    "cta": "Download for macOS",
+    "requirements": "Free \u00b7 macOS 14+ \u00b7 Apple Silicon & Intel",
+    "screenshotAlt": "Nokka hero screenshot"
+  },
+  "valueProps": {
+    "heading": "Why Nokka",
+    "ownIt": {
+      "title": "Own It",
+      "description": "Every recording saves directly to your Mac as an MP4. No cloud uploads, no account required, no platform that can revoke access. You participated in it — you should own it."
+    },
+    "controlIt": {
+      "title": "Control It",
+      "description": "Choose your recording mode: the full screen, a specific window, or drag to select any region. Record what you intend to. Nothing more."
+    },
+    "forgetIt": {
+      "title": "Forget It",
+      "description": "Nokka records in the background with a minimal floating bar. Switch apps, browse docs, write code — the recording captures exactly what you told it to, while you do everything else."
+    }
+  },
+  "featureShowcase": {
+    "heading": "Three ways to record",
+    "tablistLabel": "Recording modes",
+    "screenshotPrefix": "Screenshot",
+    "tabs": {
+      "fullScreen": {
+        "label": "Full Screen",
+        "title": "Everything. All of it.",
+        "description": "One click captures your entire display at full resolution. The simplest way to record — no decisions, no setup. Just your screen, exactly as you see it.",
+        "bullets": [
+          "Captures at native display resolution",
+          "\u2318\u21e7R to start instantly"
+        ]
+      },
+      "regionSelect": {
+        "label": "Region Select",
+        "title": "Draw a rectangle. Record what\u2019s inside.",
+        "description": "Click and drag to define your recording area. Resize with handles, see dimensions in real-time. Perfect for tutorials, specific app sections, or social media dimensions.",
+        "bullets": [
+          "Interactive resize handles",
+          "Real-time size display (W \u00d7 H px)",
+          "Minimum 200\u00d7150 pixels"
+        ]
+      },
+      "windowCapture": {
+        "label": "Window Capture",
+        "title": "Pick a window. Any window.",
+        "description": "Select a specific application window from a visual grid — even if it\u2019s in another Space or running fullscreen. Record that app while you work in another.",
+        "bullets": [
+          "Works across Spaces and fullscreen apps",
+          "Automatic system UI filtering",
+          "Live window thumbnails"
+        ]
+      }
+    }
+  },
+  "featuresGrid": {
+    "heading": "Everything you need. Nothing you don\u2019t.",
+    "features": {
+      "systemAudio": {
+        "title": "System Audio + Mic",
+        "description": "Capture system sound and your microphone on separate tracks. Record what you hear and what you say."
+      },
+      "pauseResume": {
+        "title": "Pause & Resume",
+        "description": "Life interrupts. Pause your recording, handle it, pick up exactly where you left off."
+      },
+      "globalShortcuts": {
+        "title": "Global Shortcuts",
+        "description": "\u2318\u21e7R to record. \u2318\u21e7P to pause. \u2318\u21e7M for mic. Works from anywhere, no window switching."
+      },
+      "menuBarApp": {
+        "title": "Menu Bar App",
+        "description": "Lives in your menu bar. Click to start. No dock icon, no window clutter, no setup ritual."
+      },
+      "floatingControlBar": {
+        "title": "Floating Control Bar",
+        "description": "A minimal pill-shaped bar stays visible during recording. Minimizable when you don\u2019t need it."
+      },
+      "countdownTimer": {
+        "title": "Countdown Timer",
+        "description": "Configurable countdown before recording starts. Enough time to switch to the right app."
+      },
+      "h264": {
+        "title": "H.264 Hardware Acceleration",
+        "description": "Hardware-accelerated MP4 encoding. Smooth recording without taxing your CPU."
+      },
+      "macosNative": {
+        "title": "macOS Native",
+        "description": "Built with SwiftUI and ScreenCaptureKit. No Electron, no web wrapper. Feels like it belongs on your Mac."
+      }
+    }
+  },
+  "comparison": {
+    "heading": "You\u2019ve tried the others.",
+    "items": {
+      "loom": {
+        "name": "vs. Loom",
+        "description": "Loom is great for sharing recordings with a team. But it requires an account, uploads everything to the cloud, and you can\u2019t pause mid-recording. If you want local files and more recording control, Nokka is simpler."
+      },
+      "obs": {
+        "name": "vs. OBS",
+        "description": "OBS is a professional broadcasting tool. It can do almost anything — if you\u2019re willing to learn it. For quick screen recordings on your Mac, it\u2019s like driving a semi truck to the grocery store."
+      },
+      "quicktime": {
+        "name": "vs. QuickTime",
+        "description": "QuickTime is built in and free. But it can\u2019t record system audio without workarounds, doesn\u2019t support region selection, and the controls are buried in File menus. It works until it doesn\u2019t."
+      },
+      "builtIn": {
+        "name": "vs. macOS Built-in (\u2318\u21e75)",
+        "description": "The built-in toolbar is convenient but limited. No system audio capture, basic controls, no pause/resume. Fine for a quick screenshot. Not enough for real recording work."
+      }
+    }
+  },
+  "trustBadges": {
+    "badges": [
+      "Built with Swift",
+      "~5 MB",
+      "Zero Analytics",
+      "100% Local"
+    ]
+  },
+  "downloadCta": {
+    "heading": "Ready to record?",
+    "subheading": "Download Nokka and start recording in seconds.",
+    "cta": "Download for macOS",
+    "requirements": "macOS 14 Sonoma or later \u00b7 Apple Silicon & Intel \u00b7 ~5 MB"
+  },
+  "footer": {
+    "copyright": "\u00a9 2026",
+    "releaseNotes": "Release Notes",
+    "contact": "Contact"
+  }
+}
