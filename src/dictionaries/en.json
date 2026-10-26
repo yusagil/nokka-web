@@ -54,7 +54,7 @@
           "Add attendee names, product names and in-house terms to the glossary; they're used as transcription hints and as a reference for minutes.",
           "Choose Deepgram to transcribe in the cloud with your own API key. Only then does audio go to Deepgram."
         ],
-        "imageAlt": "The speaker bar at the top of the live transcript window, with menus for 'Speaker 1' and a named participant above their lines. The interface is in Korean."
+        "imageAlt": "The speaker bar at the top of the live transcript window, with chips for 'Speaker 1' and a named participant above their lines. The interface is in Korean."
       },
       "minutes": {
         "label": "Tidy up",
