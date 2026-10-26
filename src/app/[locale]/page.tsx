@@ -1,16 +1,14 @@
 import { notFound } from "next/navigation";
 import { getDictionary, hasLocale } from "@/dictionaries";
-import type { Locale } from "@/dictionaries";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
-import ValueProps from "@/components/ValueProps";
-import FeatureShowcase from "@/components/FeatureShowcase";
+import Workflow from "@/components/Workflow";
+import DataPaths from "@/components/DataPaths";
+import FilesExport from "@/components/FilesExport";
 import FeaturesGrid from "@/components/FeaturesGrid";
-import Comparison from "@/components/Comparison";
-import TrustBadges from "@/components/TrustBadges";
+import Requirements from "@/components/Requirements";
 import DownloadCTA from "@/components/DownloadCTA";
 import Footer from "@/components/Footer";
-import AnimateIn from "@/components/AnimateIn";
 
 export default async function Home({
   params,
@@ -23,33 +21,21 @@ export default async function Home({
     notFound();
   }
 
-  const dict = await getDictionary(locale as Locale);
+  const dict = await getDictionary(locale);
 
   return (
     <>
-      <Navbar dict={dict.nav} locale={locale as Locale} />
+      <Navbar dict={dict.nav} locale={locale} />
       <main id="main-content" className="flex-1">
         <Hero dict={dict.hero} />
-        <AnimateIn>
-          <ValueProps dict={dict.valueProps} />
-        </AnimateIn>
-        <AnimateIn delay={100}>
-          <FeatureShowcase dict={dict.featureShowcase} />
-        </AnimateIn>
-        <AnimateIn>
-          <FeaturesGrid dict={dict.featuresGrid} />
-        </AnimateIn>
-        <AnimateIn>
-          <Comparison dict={dict.comparison} />
-        </AnimateIn>
-        <AnimateIn>
-          <TrustBadges dict={dict.trustBadges} />
-        </AnimateIn>
-        <AnimateIn>
-          <DownloadCTA dict={dict.downloadCta} />
-        </AnimateIn>
+        <Workflow dict={dict.how} />
+        <DataPaths dict={dict.dataPaths} />
+        <FilesExport dict={dict.files} />
+        <FeaturesGrid dict={dict.features} />
+        <Requirements dict={dict.requirements} />
+        <DownloadCTA dict={dict.downloadCta} />
       </main>
-      <Footer dict={dict.footer} locale={locale as Locale} />
+      <Footer dict={dict.footer} />
     </>
   );
 }

@@ -1,147 +1,215 @@
 {
   "meta": {
-    "title": "Nokka — Screen Recording for Mac",
-    "description": "Nokka is a free, native macOS screen recorder. Record your full screen, a specific window, or any region with system audio. Local MP4 files. No account, no cloud, no complexity.",
-    "ogAlt": "Nokka — Screen Recording for Mac"
+    "title": "Nokka — Meeting recorder for Mac",
+    "description": "Nokka records meetings and, by default, transcribes them live with speaker labels right on your Mac. Connect your own Claude, OpenAI or ChatGPT account for minutes, and export to Markdown, Word, PDF, Hangul, Notion or Slack. macOS 14+, Apple silicon.",
+    "ogAlt": "Nokka's live transcript window with named speakers and notes"
   },
   "skipToContent": "Skip to content",
   "nav": {
-    "features": "Features",
-    "download": "Download"
+    "label": "Main",
+    "how": "How it works",
+    "privacy": "Data paths",
+    "requirements": "Requirements",
+    "download": "Download",
+    "languageLabel": "Language"
   },
   "hero": {
-    "headline": "Your screen. Your recording. Your Mac.",
-    "subheadline": "A free, native macOS screen recorder. Capture your full screen, a window, or any region — with system audio. Local files, no account, no cloud.",
+    "eyebrow": "Meeting recorder for Mac",
+    "headline": "Record the meeting.\nYour Mac writes it down.",
+    "subheadline": "Nokka starts recording the moment you press the button, and by default transcribes and separates speakers on your Mac while people talk. Connect your own Claude, OpenAI or ChatGPT account only when you want minutes.",
     "cta": "Download for macOS",
-    "requirements": "Free \u00b7 macOS 14+ \u00b7 Apple Silicon & Intel",
-    "screenshotAlt": "Nokka hero screenshot"
+    "ctaHint": "(DMG, about 28 MB)",
+    "secondary": "See how it works",
+    "meta": ["macOS 14 or later", "Apple silicon only", "App in Korean"],
+    "screenshotAlt": "Nokka's live transcript window. On the left, lines attributed to 'Speaker 1' and a named participant; on the right, a note taken at 00:01:05 that says the budget needs confirming. The interface is in Korean.",
+    "caption": "The live transcript window during a recording: name speakers and take timestamped notes. Sample conversation; the app's interface is in Korean."
   },
-  "valueProps": {
-    "heading": "Why Nokka",
-    "ownIt": {
-      "title": "Own It",
-      "description": "Every recording saves directly to your Mac as an MP4. No cloud uploads, no account required, no platform that can revoke access. You participated in it — you should own it."
-    },
-    "controlIt": {
-      "title": "Control It",
-      "description": "Choose your recording mode: the full screen, a specific window, or drag to select any region. Record what you intend to. Nothing more."
-    },
-    "forgetIt": {
-      "title": "Forget It",
-      "description": "Nokka records in the background with a minimal floating bar. Switch apps, browse docs, write code — the recording captures exactly what you told it to, while you do everything else."
-    }
-  },
-  "featureShowcase": {
-    "heading": "Three ways to record",
-    "tablistLabel": "Recording modes",
-    "screenshotPrefix": "Screenshot",
-    "tabs": {
-      "fullScreen": {
-        "label": "Full Screen",
-        "title": "Everything. All of it.",
-        "description": "One click captures your entire display at full resolution. The simplest way to record — no decisions, no setup. Just your screen, exactly as you see it.",
-        "bullets": [
-          "Captures at native display resolution",
-          "\u2318\u21e7R to start instantly"
-        ]
+  "how": {
+    "eyebrow": "How it works",
+    "heading": "From recording to minutes, in one app",
+    "intro": "Record when the meeting starts, transcribe while people talk, tidy up when it ends.",
+    "steps": {
+      "record": {
+        "label": "Record",
+        "title": "Recording starts the moment you press it",
+        "description": "Nokka doesn't wait for the transcription model to download or get ready. With default settings, the part recorded before the model was ready is transcribed from the original audio on your Mac after you stop.",
+        "points": [
+          "When Zoom, Microsoft Teams, Slack huddles, Webex, Discord or Google Meet in a browser start using the mic or speakers, Nokka offers to record. For each app, choose ask, record automatically, or never.",
+          "Record audio only, or the screen too (full screen, a region or a window). Computer audio and microphone are switched on and off separately.",
+          "Check your sound before recording. While recording, Nokka watches for a dropped mic or silent computer audio, and carries on when the same earbuds reconnect.",
+          "Warnings show up where you're looking: the transcript window, the floating bar, the menu bar or a notification."
+        ],
+        "imageAlt": "Nokka's main window while recording. Below the timer, a notice reads 'transcription model needed, about 845 MB' with an Install button; below that are computer audio and microphone switches and Pause, Stop and Open transcript buttons. The interface is in Korean.",
+        "imageCaption": "The model isn't installed yet, and the recording is already running.",
+        "barAlt": "The floating bar during a recording: timer and input levels, a red warning icon, and buttons including mic, pause, stop and bookmark.",
+        "barCaption": "The floating bar shows a red icon when a warning needs your attention."
       },
-      "regionSelect": {
-        "label": "Region Select",
-        "title": "Draw a rectangle. Record what\u2019s inside.",
-        "description": "Click and drag to define your recording area. Resize with handles, see dimensions in real-time. Perfect for tutorials, specific app sections, or social media dimensions.",
-        "bullets": [
-          "Interactive resize handles",
-          "Real-time size display (W \u00d7 H px)",
-          "Minimum 200\u00d7150 pixels"
-        ]
+      "transcribe": {
+        "label": "Transcribe",
+        "title": "It writes down who said what, as they say it",
+        "description": "Live transcription runs on your Mac with Whisper, and speaker separation with Nemotron. Click 'Speaker N' on a line and pick a calendar attendee or a recent name; that name carries through to the library, transcript files and minutes.",
+        "points": [
+          "Notes typed in the panel next to the transcript are timestamped and included when minutes are written. ⌘⇧B bookmarks the current moment.",
+          "After the recording, you can name speakers while listening to a 5-second sample of each. Voices aren't stored.",
+          "Add attendee names, product names and in-house terms to the glossary; they're used as transcription hints and as a reference for minutes.",
+          "Choose Deepgram to transcribe in the cloud with your own API key. Only then does audio go to Deepgram."
+        ],
+        "imageAlt": "The speaker bar at the top of the live transcript window, with menus for 'Speaker 1' and a named participant above their lines. The interface is in Korean."
       },
-      "windowCapture": {
-        "label": "Window Capture",
-        "title": "Pick a window. Any window.",
-        "description": "Select a specific application window from a visual grid — even if it\u2019s in another Space or running fullscreen. Record that app while you work in another.",
-        "bullets": [
-          "Works across Spaces and fullscreen apps",
-          "Automatic system UI filtering",
-          "Live window thumbnails"
-        ]
+      "minutes": {
+        "label": "Tidy up",
+        "title": "It asks about the unclear parts, then writes the minutes",
+        "description": "With an LLM connected, Nokka tidies the transcript and leaves questions about anything that needs a judgment call: names, terms, dates. Once you answer, it writes minutes and tags each item with the time of the line it's based on. The original transcript is never overwritten.",
+        "points": [
+          "Connect Claude or OpenAI with your API key, or sign in with a ChatGPT subscription (experimental).",
+          "Click a citation chip to play from 5 seconds before that line. Keep several templates, and edit the minutes yourself.",
+          "Turn on automatic tidy-up and its questions appear in a small panel on the right of the screen, even while another app is in front.",
+          "Confirmed terms and meeting context stay on your Mac as Markdown memory, used for the next tidy-up and minutes.",
+          "'Ask your meetings' shows which memory items and meetings it would send, and sends nothing until you press Send."
+        ],
+        "example": {
+          "label": "Example minutes, in Korean",
+          "file": "summary.md",
+          "lang": "ko",
+          "title": "주간 회의",
+          "sections": [
+            {
+              "heading": "요약",
+              "items": [{ "text": "지난주 결과 검토, 전환율 소폭 상승 확인", "cite": "00:12" }]
+            },
+            {
+              "heading": "결정사항",
+              "items": [{ "text": "예산은 다음 주에 확정함", "cite": "00:21" }]
+            },
+            {
+              "heading": "확인 필요",
+              "items": [{ "text": "예산 규모와 담당자 미정", "cite": "" }]
+            }
+          ],
+          "citeLabel": "Time of the supporting line",
+          "note": "Minutes are written in Korean, in the default template: summary, decisions, background, action items, open questions. The content is an example."
+        }
       }
     }
   },
-  "featuresGrid": {
-    "heading": "Everything you need. Nothing you don\u2019t.",
-    "features": {
-      "systemAudio": {
-        "title": "System Audio + Mic",
-        "description": "Capture system sound and your microphone on separate tracks. Record what you hear and what you say."
-      },
-      "pauseResume": {
-        "title": "Pause & Resume",
-        "description": "Life interrupts. Pause your recording, handle it, pick up exactly where you left off."
-      },
-      "globalShortcuts": {
-        "title": "Global Shortcuts",
-        "description": "\u2318\u21e7R to record. \u2318\u21e7P to pause. \u2318\u21e7M for mic. Works from anywhere, no window switching."
-      },
-      "menuBarApp": {
-        "title": "Menu Bar App",
-        "description": "Lives in your menu bar. Click to start. No dock icon, no window clutter, no setup ritual."
-      },
-      "floatingControlBar": {
-        "title": "Floating Control Bar",
-        "description": "A minimal pill-shaped bar stays visible during recording. Minimizable when you don\u2019t need it."
-      },
-      "countdownTimer": {
-        "title": "Countdown Timer",
-        "description": "Configurable countdown before recording starts. Enough time to switch to the right app."
-      },
-      "h264": {
-        "title": "H.264 Hardware Acceleration",
-        "description": "Hardware-accelerated MP4 encoding. Smooth recording without taxing your CPU."
-      },
-      "macosNative": {
-        "title": "macOS Native",
-        "description": "Built with SwiftUI and ScreenCaptureKit. No Electron, no web wrapper. Feels like it belongs on your Mac."
-      }
-    }
+  "dataPaths": {
+    "eyebrow": "Data paths",
+    "heading": "What leaves your Mac is spelled out in Settings",
+    "intro": "Processing happens on your Mac by default. Cloud services are used only when you connect your own key or account, and the Data paths card in Settings › General shows what goes where with your current settings.",
+    "table": {
+      "caption": "Where data goes at each step",
+      "columns": ["Step", "Default", "If you connect a service"],
+      "leavesMac": "Sent off this Mac",
+      "notApplicable": "Not applicable",
+      "rows": [
+        { "stage": "Recordings", "local": "This Mac · your recordings folder", "connected": "Not applicable" },
+        { "stage": "Live transcription and speakers", "local": "Whisper + Nemotron · this Mac", "connected": "Deepgram · audio sent while recording" },
+        { "stage": "Re-transcription and gap filling", "local": "Apple or Whisper · this Mac", "connected": "Deepgram · audio sent" },
+        { "stage": "Tidy-up, questions, minutes, Ask your meetings", "local": "Off until you connect one", "connected": "Claude, OpenAI or ChatGPT · transcript and related memory sent" },
+        { "stage": "Term and meeting memory", "local": "This Mac · Markdown files", "connected": "Not applicable" },
+        { "stage": "Notion and Slack export", "local": "Off until you connect one", "connected": "Sent only when you export" }
+      ]
+    },
+    "localOnly": {
+      "title": "Local-only mode",
+      "description": "Blocks everything except model downloads. Deepgram switches to an engine on your Mac, and tidy-up, minutes, Ask your meetings, Notion and Slack are turned off."
+    },
+    "facts": [
+      "Deepgram, Claude and OpenAI keys and the ChatGPT sign-in are stored in the macOS Keychain.",
+      "No analytics or tracking SDKs in the app.",
+      "Deepgram's connection check only verifies the key and sends no audio.",
+      "Models for on-Mac transcription are downloaded from the internet on first use (about 845 MB)."
+    ]
   },
-  "comparison": {
-    "heading": "You\u2019ve tried the others.",
+  "files": {
+    "eyebrow": "Files and export",
+    "heading": "Everything ends up as ordinary files",
+    "intro": "One recording, one folder. Transcript, subtitles, minutes and metadata sit side by side, ready for your knowledge base or automations.",
+    "treeLabel": "What one recording folder under ~/Movies/Nokka/ contains",
+    "tree": [
+      { "name": "Nokka_2026-10-26_10-30-00.m4a", "note": "Audio recording (.mp4 for screen recordings)" },
+      { "name": "Nokka_2026-10-26_10-30-00.txt · .srt", "note": "Transcript and subtitles" },
+      { "name": "transcript.json", "note": "Times, speaker and text per segment" },
+      { "name": "summary.md", "note": "Minutes, if created" },
+      { "name": "nokka.json", "note": "Title, attendees, speaker names, notes" }
+    ],
+    "formatsHeading": "Export to",
+    "formats": ["Markdown · Obsidian", "Word (.docx)", "PDF", "Hangul (.hwpx)", "Notion", "Slack", "Trim · GIF (screen recordings)"],
+    "formatsNote": "Pick what to include: minutes, transcript, timestamps, speaker names, bookmarks. Slack always gets the minutes only. Point Nokka at an Obsidian folder and it saves a note whenever minutes are created."
+  },
+  "features": {
+    "eyebrow": "Also included",
+    "heading": "Small things you'll use every day",
     "items": {
-      "loom": {
-        "name": "vs. Loom",
-        "description": "Loom is great for sharing recordings with a team. But it requires an account, uploads everything to the cloud, and you can\u2019t pause mid-recording. If you want local files and more recording control, Nokka is simpler."
+      "menubar": {
+        "title": "Menu bar and shortcuts",
+        "description": "Start and stop right from the menu bar. ⌘⇧R record, ⌘⇧P pause, ⌘⇧M mic, ⌘⇧B bookmark. Shortcuts can be changed and need Accessibility permission."
       },
-      "obs": {
-        "name": "vs. OBS",
-        "description": "OBS is a professional broadcasting tool. It can do almost anything — if you\u2019re willing to learn it. For quick screen recordings on your Mac, it\u2019s like driving a semi truck to the grocery store."
+      "tracks": {
+        "title": "Separate audio tracks",
+        "description": "Computer audio and microphone are saved as separate tracks, with RNNoise noise suppression on the mic. The unsuppressed original is kept as well and used for transcription."
       },
-      "quicktime": {
-        "name": "vs. QuickTime",
-        "description": "QuickTime is built in and free. But it can\u2019t record system audio without workarounds, doesn\u2019t support region selection, and the controls are buried in File menus. It works until it doesn\u2019t."
+      "meetingEnd": {
+        "title": "When the meeting ends",
+        "description": "Automatically recorded meetings stop after a 10-second countdown, and short automatic recordings ask before they're kept. You can also have recording stop after a long silence."
       },
-      "builtIn": {
-        "name": "vs. macOS Built-in (\u2318\u21e75)",
-        "description": "The built-in toolbar is convenient but limited. No system audio capture, basic controls, no pause/resume. Fine for a quick screenshot. Not enough for real recording work."
+      "calendar": {
+        "title": "Calendar (optional)",
+        "description": "Uses the current event's name as the recording title and its attendees as speaker-name suggestions, and reminds you 5 minutes before events with attendees."
+      },
+      "notice": {
+        "title": "Copy a recording notice",
+        "description": "Other participants don't see a recording indicator on their screen. Copy your notice text and paste it into the meeting chat."
+      },
+      "playback": {
+        "title": "Search and playback",
+        "description": "Search titles and transcripts in the library, and click a result or bookmark to play from there. The sentence you're hearing is highlighted, at 1×, 1.25× or 1.5× speed."
+      },
+      "screen": {
+        "title": "Screen recording",
+        "description": "Full screen, a region or a window, with H.264 hardware encoding. Windows in other Spaces can be picked, and a webcam overlay is available."
+      },
+      "safety": {
+        "title": "Recordings that survive a crash",
+        "description": "Files are written in 2-second fragments, so a recording stays playable up to the moment the app quit unexpectedly, and the next launch tells you how much was saved."
       }
     }
   },
-  "trustBadges": {
-    "badges": [
-      "Built with Swift",
-      "~5 MB",
-      "Zero Analytics",
-      "100% Local"
+  "requirements": {
+    "eyebrow": "Before you start",
+    "heading": "Requirements and known limitations",
+    "requirementsHeading": "Requirements",
+    "items": [
+      { "term": "macOS", "detail": "14 Sonoma or later" },
+      { "term": "Mac", "detail": "Apple silicon. Intel Macs are not supported." },
+      { "term": "Permissions", "detail": "Microphone. Screen & System Audio Recording only when you record computer audio or the screen. Setup asks only for what your chosen use needs; shortcuts, calendar and webcam ask when you use them." },
+      { "term": "Storage", "detail": "The DMG is about 28 MB. On-Mac transcription downloads about 845 MB of models (Whisper + Nemotron) on first use; not needed if you only record or use Deepgram." },
+      { "term": "Language", "detail": "The app's interface and minutes are in Korean. The transcription language is chosen per recording: Korean, English, Japanese, Chinese, Spanish, German or French." },
+      { "term": "Install", "detail": "The app is signed with a Developer ID and notarized by Apple. The release notes list the file's SHA-256." },
+      { "term": "Built with", "detail": "SwiftUI and ScreenCaptureKit. A native macOS app." }
+    ],
+    "limitsHeading": "Known limitations",
+    "limits": [
+      "Each recording is transcribed in one language. With Korean selected, Whisper and Deepgram drop English sentences, and the Apple engine transcribes them with broken spelling.",
+      "After-recording Whisper transcription can pull the first sentence's start time back into the silence before it.",
+      "Live speaker separation handles the mic and computer audio separately. The same person picked up by both isn't merged automatically.",
+      "If computer audio stops during a recording, for example after switching output devices, Nokka warns you but doesn't restart the capture. Stop and start the recording again.",
+      "On macOS 14 and 15, after-recording transcription with the Apple engine can cut off results for long files.",
+      "ChatGPT subscription sign-in is experimental and may stop working if OpenAI changes its policy. API-key connections are unaffected."
     ]
   },
   "downloadCta": {
-    "heading": "Ready to record?",
-    "subheading": "Download Nokka and start recording in seconds.",
+    "heading": "Try it on your next meeting",
+    "subheading": "Open the DMG and drag Nokka to Applications. On first launch, choose what to record and how to transcribe, and Nokka asks only for the permissions that needs.",
     "cta": "Download for macOS",
-    "requirements": "macOS 14 Sonoma or later \u00b7 Apple Silicon & Intel \u00b7 ~5 MB"
+    "ctaHint": "(DMG, about 28 MB)",
+    "meta": ["macOS 14 or later", "Apple silicon", "DMG about 28 MB"],
+    "releaseLink": "Release notes and SHA-256"
   },
   "footer": {
-    "copyright": "\u00a9 2026",
-    "releaseNotes": "Release Notes",
-    "contact": "Contact"
+    "copyright": "© 2026 Nokka",
+    "releaseNotes": "Release notes",
+    "contact": "Contact (GitHub)",
+    "linksLabel": "Site links"
   }
 }

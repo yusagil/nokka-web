@@ -1,33 +1,31 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
+import en from "@/dictionaries/en.json";
+import { ISSUES_URL, RELEASES_URL } from "@/lib/links";
 import Footer from "../Footer";
 
-const dict = {
-  copyright: "\u00a9 2026",
-  releaseNotes: "Release Notes",
-  contact: "Contact",
-};
-
 describe("Footer", () => {
-  it('renders "Nokka" wordmark and copyright', () => {
-    render(<Footer dict={dict} locale="en" />);
+  it('renders "Nokka" and the copyright', () => {
+    render(<Footer dict={en.footer} />);
     expect(screen.getByText("Nokka")).toBeInTheDocument();
     expect(screen.getByText(/© 2026/)).toBeInTheDocument();
   });
 
-  it("has links: Release Notes, Contact", () => {
-    render(<Footer dict={dict} locale="en" />);
-    expect(
-      screen.getByRole("link", { name: "Release Notes" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Contact" })
-    ).toBeInTheDocument();
+  it("links release notes to GitHub Releases instead of a missing page", () => {
+    render(<Footer dict={en.footer} />);
+    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute(
+      "href",
+      RELEASES_URL
+    );
   });
 
-  it("has top border", () => {
-    render(<Footer dict={dict} locale="en" />);
-    const footer = screen.getByRole("contentinfo");
-    expect(footer.className).toMatch(/border-t/);
+  it("links contact to GitHub issues", () => {
+    render(<Footer dict={en.footer} />);
+    expect(screen.getByRole("link", { name: /contact/i })).toHaveAttribute("href", ISSUES_URL);
+  });
+
+  it("has a top border", () => {
+    render(<Footer dict={en.footer} />);
+    expect(screen.getByRole("contentinfo").className).toMatch(/border-t/);
   });
 });

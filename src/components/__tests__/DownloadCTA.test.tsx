@@ -1,37 +1,33 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
+import en from "@/dictionaries/en.json";
+import { DOWNLOAD_URL, LATEST_RELEASE_URL } from "@/lib/links";
 import DownloadCTA from "../DownloadCTA";
 
-const dict = {
-  heading: "Ready to record?",
-  subheading: "Download Nokka and start recording in seconds.",
-  cta: "Download for macOS",
-  requirements: "macOS 14 Sonoma or later \u00b7 Apple Silicon & Intel \u00b7 ~5 MB",
-};
-
 describe("DownloadCTA", () => {
-  it('has id="download"', () => {
-    const { container } = render(<DownloadCTA dict={dict} />);
-    expect(container.querySelector("#download")).toBeInTheDocument();
-  });
-
-  it('renders heading "Ready to record?"', () => {
-    render(<DownloadCTA dict={dict} />);
+  it("is the #download section with a heading", () => {
+    const { container } = render(<DownloadCTA dict={en.downloadCta} />);
+    expect(container.querySelector("section#download")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /ready to record\?/i })
+      screen.getByRole("heading", { level: 2, name: en.downloadCta.heading })
     ).toBeInTheDocument();
   });
 
-  it('has download button with text "Download for macOS"', () => {
-    render(<DownloadCTA dict={dict} />);
-    expect(
-      screen.getByRole("link", { name: /download for macos/i })
-    ).toBeInTheDocument();
+  it("download button points at the latest release DMG", () => {
+    render(<DownloadCTA dict={en.downloadCta} />);
+    expect(screen.getByRole("link", { name: /download for macos/i })).toHaveAttribute(
+      "href",
+      DOWNLOAD_URL
+    );
   });
 
-  it("shows system requirements", () => {
-    render(<DownloadCTA dict={dict} />);
-    expect(screen.getByText(/macOS 14 Sonoma or later/i)).toBeInTheDocument();
-    expect(screen.getByText(/Apple Silicon & Intel/i)).toBeInTheDocument();
+  it("shows requirements and links to the release notes for the checksum", () => {
+    render(<DownloadCTA dict={en.downloadCta} />);
+    expect(screen.getByText("macOS 14 or later")).toBeInTheDocument();
+    expect(screen.getByText("Apple silicon")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /release notes and sha-256/i })).toHaveAttribute(
+      "href",
+      LATEST_RELEASE_URL
+    );
   });
 });
