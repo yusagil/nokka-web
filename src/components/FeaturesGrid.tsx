@@ -1,127 +1,120 @@
-interface FeatureDict {
-  title: string;
-  description: string;
-}
+import type { ReactNode } from "react";
+import type { Dictionary } from "@/dictionaries";
+import SectionHeading from "./SectionHeading";
 
 interface FeaturesGridProps {
-  dict: {
-    heading: string;
-    features: {
-      systemAudio: FeatureDict;
-      pauseResume: FeatureDict;
-      globalShortcuts: FeatureDict;
-      menuBarApp: FeatureDict;
-      floatingControlBar: FeatureDict;
-      countdownTimer: FeatureDict;
-      h264: FeatureDict;
-      macosNative: FeatureDict;
-    };
-  };
+  dict: Dictionary["features"];
 }
 
-export default function FeaturesGrid({ dict }: FeaturesGridProps) {
-  const features = [
-    {
-      ...dict.features.systemAudio,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-          <line x1="12" y1="19" x2="12" y2="23" />
-          <line x1="8" y1="23" x2="16" y2="23" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.pauseResume,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="6" y="4" width="4" height="16" rx="1" />
-          <rect x="14" y="4" width="4" height="16" rx="1" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.globalShortcuts,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.menuBarApp,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="4" rx="1" />
-          <circle cx="12" cy="5" r="1" fill="currentColor" />
-          <path d="M4 7v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.floatingControlBar,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="9" width="18" height="6" rx="3" />
-          <circle cx="8" cy="12" r="1.5" fill="currentColor" />
-          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.countdownTimer,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="13" r="9" />
-          <polyline points="12,9 12,13 15,15" />
-          <path d="M9 1h6M12 1v3" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.h264,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <path d="M9 9h6v6H9z" />
-          <path d="M4 9h2M4 15h2M18 9h2M18 15h2M9 4v2M15 4v2M9 18v2M15 18v2" />
-        </svg>
-      ),
-    },
-    {
-      ...dict.features.macosNative,
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2C8 2 4 6 4 10c0 6 8 12 8 12s8-6 8-12c0-4-4-8-8-8z" />
-          <path d="M12 2c2 2 3 4 3 6s-1 4-3 6c-2-2-3-4-3-6s1-4 3-6z" />
-        </svg>
-      ),
-    },
-  ];
+type FeatureKey = keyof Dictionary["features"]["items"];
 
+const icon = (children: ReactNode) => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {children}
+  </svg>
+);
+
+const ICONS: Record<FeatureKey, ReactNode> = {
+  menubar: icon(
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 8h18M15 6h.01M18 6h.01" />
+      <path d="M8 13h8M8 16h5" />
+    </>,
+  ),
+  tracks: icon(
+    <>
+      <path d="M3 8h2l2-3 3 6 2-3h2l2-2 2 2h3" />
+      <path d="M3 17h3l2-2 2 4 2-4 2 2h7" />
+    </>,
+  ),
+  meetingEnd: icon(
+    <>
+      <circle cx="12" cy="13" r="8" />
+      <path d="M12 9v4l2.5 2.5M10 2h4" />
+    </>,
+  ),
+  calendar: icon(
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </>,
+  ),
+  notice: icon(
+    <>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </>,
+  ),
+  playback: icon(
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 5 5" />
+      <path d="m9 8 4 2.5L9 13z" />
+    </>,
+  ),
+  screen: icon(
+    <>
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <path d="M7 8h4M7 8v3M17 13h-4M17 13v-3" />
+    </>,
+  ),
+  safety: icon(
+    <>
+      <path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z" />
+      <path d="m9 12 2 2 4-4" />
+    </>,
+  ),
+};
+
+const ORDER: FeatureKey[] = [
+  "menubar",
+  "tracks",
+  "meetingEnd",
+  "calendar",
+  "notice",
+  "playback",
+  "screen",
+  "safety",
+];
+
+export default function FeaturesGrid({ dict }: FeaturesGridProps) {
   return (
-    <section id="features" className="py-20">
-      <div className="mx-auto max-w-[--content-max-width] px-6">
-        <h2 className="mb-12 text-center text-[40px] font-bold leading-tight">
-          {dict.heading}
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="rounded-[10px] border border-[--color-border-default] bg-[--color-bg-secondary] p-5"
-            >
-              <div className="mb-3 text-[--color-accent]">{feature.icon}</div>
-              <h3 className="mb-1.5 text-base font-semibold">
-                {feature.title}
-              </h3>
-              <p className="text-sm text-[--color-text-secondary]">
-                {feature.description}
-              </p>
-            </div>
-          ))}
-        </div>
+    <section
+      id="features"
+      aria-labelledby="features-heading"
+      className="border-t border-line-subtle px-4 py-20 md:px-8 md:py-28"
+    >
+      <div className="mx-auto max-w-content">
+        <SectionHeading id="features-heading" eyebrow={dict.eyebrow} heading={dict.heading} />
+        <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {ORDER.map((key) => {
+            const feature = dict.items[key];
+            return (
+              <li
+                key={key}
+                className="reveal rounded-[14px] border border-line bg-surface p-6"
+              >
+                <div className="text-accent">{ICONS[key]}</div>
+                <h3 className="mt-4 text-base font-semibold text-fg">{feature.title}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-fg-muted">
+                  {feature.description}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </section>
   );

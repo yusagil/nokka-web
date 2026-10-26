@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# nokka-web
 
-## Getting Started
+Landing page for [Nokka](https://nokka-web.vercel.app), a meeting recorder for macOS. Next.js (App Router) with
+`/en` and `/ko`, deployed on Vercel from `main`.
 
-First, run the development server:
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+npm run dev        # http://localhost:3000
+npm run lint
+npx tsc --noEmit
+npm run test:run   # vitest
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Read `AGENTS.md` first: this Next.js version differs from older ones (for example `src/proxy.ts` instead of
+middleware).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Content
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Copy lives in `src/dictionaries/en.json` and `ko.json`. Both must have the same structure
+  (`src/dictionaries/__tests__/dictionaries.test.ts` checks this, and that the copy makes no blanket
+  "100% local / no cloud" claims). Product facts come from the Nokka app repository's README and CHANGELOG.
+- App screens in `public/screens/` are renders from the app's preview tests with sample conversations.
+  Do not use screenshots of real recordings.
+- Design tokens are in `src/app/globals.css` (`@theme`), following `DESIGN_REQUIREMENTS.md`.
 
-## Learn More
+## Download link
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The download buttons point at `https://github.com/yusagil/nokka-web/releases/latest/download/Nokka.dmg`
+(`src/lib/links.ts`), so publishing a new GitHub Release with an asset named exactly `Nokka.dmg`, marked latest
+(not draft or prerelease), updates the site without a code change. Build numbers and SHA-256 checksums belong in
+the release notes, not on the site.

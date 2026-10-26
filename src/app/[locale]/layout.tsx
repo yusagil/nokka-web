@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { hasLocale, getDictionary, locales } from "@/dictionaries";
-import type { Locale } from "@/dictionaries";
+import { DOWNLOAD_URL, SITE_URL } from "@/lib/links";
 
 export async function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -15,9 +15,16 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!hasLocale(locale)) return {};
 
-  const dict = await getDictionary(locale as Locale);
+  const dict = await getDictionary(locale);
+  const ogImage = {
+    url: `/og-${locale}.png`,
+    width: 1200,
+    height: 630,
+    alt: dict.meta.ogAlt,
+  };
 
   return {
+    metadataBase: new URL(SITE_URL),
     title: dict.meta.title,
     description: dict.meta.description,
     robots: "index, follow",
@@ -25,22 +32,16 @@ export async function generateMetadata({
       title: dict.meta.title,
       description: dict.meta.description,
       type: "website",
+      url: `/${locale}`,
       locale: locale === "ko" ? "ko_KR" : "en_US",
       siteName: "Nokka",
-      images: [
-        {
-          url: "/og-image.png",
-          width: 1200,
-          height: 630,
-          alt: dict.meta.ogAlt,
-        },
-      ],
+      images: [ogImage],
     },
     twitter: {
       card: "summary_large_image",
       title: dict.meta.title,
       description: dict.meta.description,
-      images: ["/og-image.png"],
+      images: [ogImage],
     },
     alternates: {
       canonical: `/${locale}`,
@@ -56,6 +57,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: "#0E0E10",
+  colorScheme: "dark",
 };
 
 export default async function LocaleLayout({
@@ -71,28 +73,27 @@ export default async function LocaleLayout({
     notFound();
   }
 
-  const dict = await getDictionary(locale as Locale);
+  const dict = await getDictionary(locale);
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Nokka",
-    operatingSystem: "macOS 14+",
-    applicationCategory: "MultimediaApplication",
-    offers: {
-      "@type": "Offer",
-      price: "0",
-      priceCurrency: "USD",
-    },
+    operatingSystem: "macOS 14 or later",
+    softwareRequirements: "Apple silicon Mac, macOS 14 Sonoma or later",
+    applicationCategory: "BusinessApplication",
+    downloadUrl: DOWNLOAD_URL,
+    url: `${SITE_URL}/${locale}`,
+    inLanguage: locale,
     description: dict.meta.description,
   };
 
   return (
-    <html lang={locale} className="dark h-full antialiased">
-      <body className="min-h-full flex flex-col">
+    <html lang={locale} className="h-full antialiased">
+      <body className="flex min-h-full flex-col">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[--color-accent] focus:text-white focus:rounded-[--radius-md]"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-[10px] focus:bg-accent-strong focus:px-4 focus:py-2 focus:text-white"
         >
           {dict.skipToContent}
         </a>

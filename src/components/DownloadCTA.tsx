@@ -1,65 +1,58 @@
+import type { Dictionary } from "@/dictionaries";
+import { LATEST_RELEASE_URL } from "@/lib/links";
+import DownloadButton from "./DownloadButton";
+
 interface DownloadCTAProps {
-  dict: {
-    heading: string;
-    subheading: string;
-    cta: string;
-    requirements: string;
-  };
+  dict: Dictionary["downloadCta"];
 }
 
 export default function DownloadCTA({ dict }: DownloadCTAProps) {
   return (
     <section
       id="download"
-      className="relative py-24 px-4 text-center"
+      aria-labelledby="download-heading"
+      className="relative overflow-hidden border-t border-line-subtle px-4 py-24 text-center md:px-8 md:py-32"
     >
-      {/* Subtle radial glow */}
       <div
+        aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(600px circle at 50% 50%, var(--color-accent-glow), transparent 70%)",
+            "radial-gradient(640px circle at 50% 50%, var(--color-accent-glow), transparent 70%)",
         }}
-        aria-hidden="true"
       />
 
-      <div className="relative mx-auto max-w-[1120px]">
-        <h2 className="mb-4 text-[40px] font-bold leading-tight text-[--color-text-primary]">
+      <div className="relative mx-auto max-w-[640px]">
+        <h2
+          id="download-heading"
+          className="text-[32px] font-bold leading-[1.15] tracking-[-0.025em] text-fg md:text-[40px]"
+        >
           {dict.heading}
         </h2>
-        <p className="mb-8 text-lg text-[--color-text-secondary]">
-          {dict.subheading}
-        </p>
+        <p className="mt-4 text-lg leading-relaxed text-fg-muted">{dict.subheading}</p>
+
+        <div className="mt-10">
+          <DownloadButton label={dict.cta} hint={dict.ctaHint} size="lg" />
+        </div>
+
+        <ul className="mt-6 flex flex-wrap justify-center gap-x-2 font-mono text-sm text-fg-subtle">
+          {dict.meta.map((item, i) => (
+            <li key={item} className="flex items-center gap-2">
+              {i > 0 && <span aria-hidden="true">/</span>}
+              {item}
+            </li>
+          ))}
+        </ul>
 
         <a
-          href="https://github.com/yusagil/nokka-web/releases/download/v1.0.0/Nokka.dmg"
-          className="mx-auto inline-flex h-14 items-center gap-2 rounded-full bg-[--color-accent] px-8 text-lg font-medium text-white transition-colors duration-150 hover:bg-[--color-accent-hover]"
+          href={LATEST_RELEASE_URL}
+          className="mt-4 inline-flex min-h-11 items-center text-sm text-accent-text underline-offset-4 hover:underline"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 18 18"
-            fill="none"
-            aria-hidden="true"
-            className="shrink-0"
-          >
-            <path
-              d="M9 2.25v9.75m0 0L5.25 8.25M9 12l3.75-3.75M3 14.25h12"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {dict.cta}
+          {dict.releaseLink}
+          <span aria-hidden="true" className="ml-1">
+            →
+          </span>
         </a>
-
-        <p
-          className="mt-6 text-sm text-[--color-text-tertiary]"
-          style={{ fontFamily: "var(--font-mono)" }}
-        >
-          {dict.requirements}
-        </p>
       </div>
     </section>
   );
