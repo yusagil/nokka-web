@@ -80,10 +80,11 @@ export default function Workflow({ dict }: WorkflowProps) {
       ...transcribe,
       media: (
         <Screenshot
-          src="/screens/speaker-names.png"
+          src="/screens/speaker-naming.png"
           alt={transcribe.imageAlt}
           width={760}
-          height={354}
+          height={409}
+          caption={transcribe.imageCaption}
           sizes="(min-width: 1024px) 480px, 90vw"
           className="w-full max-w-[480px]"
         />

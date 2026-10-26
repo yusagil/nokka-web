@@ -47,6 +47,10 @@ describe("dictionaries", () => {
     expect(all).not.toMatch(/무료|\bfree\b/i);
   });
 
+  it("describe speaker naming as the in-window row, not a dropdown menu", () => {
+    expect(all).not.toMatch(/드롭다운|drop-?down/i);
+  });
+
   it("do not hard-code a build number or checksum", () => {
     expect(all).not.toMatch(/\b[0-9a-f]{64}\b/);
     expect(all).not.toMatch(/2\.1\.0|\(11\)|\(12\)/);

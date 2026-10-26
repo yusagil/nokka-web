@@ -40,7 +40,9 @@ describe("Hero", () => {
   it("shows the live transcript screenshot with descriptive alt text and a caption", () => {
     render(<Hero dict={en.hero} />);
     const img = screen.getByRole("img", { name: /live transcript window/i });
-    expect(img).toHaveAttribute("src", expect.stringContaining("live-transcript.png"));
+    expect(img).toHaveAttribute("src", expect.stringContaining("live-window.png"));
+    expect(img).toHaveAccessibleName(expect.stringMatching(/pencil icons/));
+    expect(screen.getByText(/click a speaker to name them/)).toBeInTheDocument();
     expect(screen.getByText(/Sample conversation/)).toBeInTheDocument();
   });
 
