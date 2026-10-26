@@ -21,8 +21,8 @@
     "ctaHint": "(DMG, about 28 MB)",
     "secondary": "See how it works",
     "meta": ["macOS 14 or later", "Apple silicon only", "App in Korean"],
-    "screenshotAlt": "Nokka's live transcript window. On the left, lines attributed to 'Speaker 1' and a named participant; on the right, a note taken at 00:01:05 that says the budget needs confirming. The interface is in Korean.",
-    "caption": "The live transcript window during a recording: name speakers and take timestamped notes. Sample conversation; the app's interface is in Korean."
+    "screenshotAlt": "Nokka's live transcript window. The speaker bar at the top has chips with pencil icons for 'Speaker 1' and a named participant; their lines run down the left, and the notes panel on the right holds a note taken at 00:01:05 that says the budget needs confirming. The interface is in Korean.",
+    "caption": "The live transcript window during a recording: click a speaker to name them, and take timestamped notes on the right. Sample conversation; the app's interface is in Korean."
   },
   "how": {
     "eyebrow": "How it works",
@@ -47,14 +47,15 @@
       "transcribe": {
         "label": "Transcribe",
         "title": "It writes down who said what, as they say it",
-        "description": "Live transcription runs on your Mac with Whisper, and speaker separation with Nemotron. Click 'Speaker N' on a line and pick a calendar attendee or a recent name; that name carries through to the library, transcript files and minutes.",
+        "description": "Live transcription runs on your Mac with Whisper, and speaker separation with Nemotron. Click a speaker in the bar at the top, or the speaker's name on a line, and a naming row opens right in the window. Type a name or pick a calendar attendee, your own name or a recent one; it carries through to the library, transcript files and minutes.",
         "points": [
           "Notes typed in the panel next to the transcript are timestamped and included when minutes are written. ⌘⇧B bookmarks the current moment.",
           "After the recording, you can name speakers while listening to a 5-second sample of each. Voices aren't stored.",
           "Add attendee names, product names and in-house terms to the glossary; they're used as transcription hints and as a reference for minutes.",
           "Choose Deepgram to transcribe in the cloud with your own API key. Only then does audio go to Deepgram."
         ],
-        "imageAlt": "The speaker bar at the top of the live transcript window, with chips for 'Speaker 1' and a named participant above their lines. The interface is in Korean."
+        "imageAlt": "The live transcript window after clicking 'Speaker 1': a naming row has opened below the speaker bar, with a name field and two suggested names, above the speakers' lines. The interface is in Korean.",
+        "imageCaption": "Clicking 'Speaker 1' opens a naming row right below it. The name you choose goes on every line from that speaker."
       },
       "minutes": {
         "label": "Tidy up",

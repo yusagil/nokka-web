@@ -26,8 +26,18 @@ describe("Workflow", () => {
 
   it("shows speaker naming and the floating bar with alt text", () => {
     render(<Workflow dict={en.how} />);
-    expect(screen.getByRole("img", { name: /speaker bar/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /naming row has opened/i })).toHaveAttribute(
+      "src",
+      expect.stringContaining("speaker-naming.png")
+    );
+    expect(screen.getByText(/opens a naming row right below it/)).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /floating bar/i })).toBeInTheDocument();
+  });
+
+  it("describes naming a speaker in the window in Korean", () => {
+    render(<Workflow dict={ko.how} />);
+    expect(screen.getByRole("img", { name: /이름 줄이 열려/ })).toBeInTheDocument();
+    expect(screen.getByText(/창 안에 이름 줄이 열립니다/)).toBeInTheDocument();
   });
 
   it("says when audio and transcripts leave the Mac", () => {

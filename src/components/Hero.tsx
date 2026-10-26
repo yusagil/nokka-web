@@ -75,7 +75,7 @@ export default function Hero({ dict }: HeroProps) {
         </ul>
 
         <Screenshot
-          src="/screens/live-transcript.png"
+          src="/screens/live-window.png"
           alt={dict.screenshotAlt}
           width={1520}
           height={720}
