@@ -23,7 +23,7 @@ export default function Navbar({ dict, locale }: NavbarProps) {
         className="mx-auto flex h-14 max-w-content items-center justify-between gap-4 px-4 md:px-8"
       >
         <a href={`/${locale}`} className="flex min-h-11 items-center gap-2 rounded-md">
-          <Image src="/nokka-mark.png" alt="" width={28} height={28} />
+          <Image src="/nokka-mark.png" alt="" width={28} height={28} loading="eager" />
           <span className="text-lg font-semibold tracking-tight text-fg">Nokka</span>
         </a>
 

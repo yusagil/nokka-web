@@ -80,7 +80,7 @@ export default function Hero({ dict }: HeroProps) {
           width={1520}
           height={720}
           caption={dict.caption}
-          priority
+          preload
           sizes="(min-width: 1024px) 960px, 100vw"
           className="mt-14 w-full max-w-[960px] md:mt-16"
         />

@@ -7,7 +7,8 @@ interface ScreenshotProps {
   width: number;
   height: number;
   caption?: string;
-  priority?: boolean;
+  /** Preload in <head>: only for the above-the-fold LCP image. */
+  preload?: boolean;
   /** Rendered width hint for responsive srcset. */
   sizes?: string;
   className?: string;
@@ -20,7 +21,7 @@ export default function Screenshot({
   width,
   height,
   caption,
-  priority = false,
+  preload = false,
   sizes = "(min-width: 1024px) 560px, 100vw",
   className = "",
 }: ScreenshotProps) {
@@ -32,7 +33,7 @@ export default function Screenshot({
         width={width}
         height={height}
         sizes={sizes}
-        priority={priority}
+        preload={preload}
         className="block h-auto w-full"
       />
     </div>
