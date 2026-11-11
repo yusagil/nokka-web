@@ -117,7 +117,7 @@
     },
     "localOnly": {
       "title": "Local-only mode",
-      "description": "Blocks everything except model downloads. Deepgram and Soniox switch to engines on your Mac, and tidy-up, minutes, Ask your meetings, Notion and Slack are turned off."
+      "description": "Blocks everything except model downloads and update checks. Deepgram and Soniox switch to engines on your Mac, and tidy-up, minutes, Ask your meetings, Notion and Slack are turned off."
     },
     "facts": [
       "Deepgram, Soniox, Claude and OpenAI keys and the ChatGPT sign-in are stored in the macOS Keychain.",

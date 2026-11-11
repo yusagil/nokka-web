@@ -117,7 +117,7 @@
     },
     "localOnly": {
       "title": "로컬 전용 모드",
-      "description": "켜면 모델 다운로드 외의 전송을 막습니다. Deepgram·Soniox는 이 Mac의 엔진으로 바뀌고, 정돈·회의록·회의 기록에 묻기·Notion·Slack은 꺼집니다."
+      "description": "켜면 모델 다운로드와 업데이트 확인 외의 전송을 막습니다. Deepgram·Soniox는 이 Mac의 엔진으로 바뀌고, 정돈·회의록·회의 기록에 묻기·Notion·Slack은 꺼집니다."
     },
     "facts": [
       "Deepgram·Soniox·Claude·OpenAI 키와 ChatGPT 로그인 정보는 macOS 키체인에 저장합니다.",

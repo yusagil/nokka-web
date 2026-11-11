@@ -46,7 +46,7 @@ describe("DataPaths", () => {
   it("describes local-only mode for both cloud engines", () => {
     render(<DataPaths dict={en.dataPaths} />);
     expect(screen.getByRole("heading", { level: 3, name: "Local-only mode" })).toBeInTheDocument();
-    expect(screen.getByText(/Blocks everything except model downloads/)).toHaveTextContent(
+    expect(screen.getByText(/Blocks everything except model downloads and update checks/)).toHaveTextContent(
       /Deepgram and Soniox switch to engines on your Mac/
     );
   });
