@@ -51,9 +51,25 @@ describe("dictionaries", () => {
     expect(all).not.toMatch(/드롭다운|drop-?down/i);
   });
 
-  it("do not hard-code a build number or checksum", () => {
+  it("do not hard-code a version, build number or checksum", () => {
     expect(all).not.toMatch(/\b[0-9a-f]{64}\b/);
-    expect(all).not.toMatch(/2\.1\.0|\(11\)|\(12\)/);
+    expect(all).not.toMatch(/\bv?\d+\.\d+\.\d+\b/);
+    expect(all).not.toMatch(/\(1\d\)/);
+  });
+
+  it("present the two cloud engines side by side, without a pick or a ranking", () => {
+    expect(all).not.toMatch(/추천|권장|recommend/i);
+    expect(all).not.toMatch(/더 정확|가장 정확|more accurate|most accurate/i);
+    for (const dict of [en, ko]) {
+      const copy = strings(dict).join("\n");
+      expect(copy.match(/Soniox/g)?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("say that cloud engines still separate speakers on this Mac", () => {
+    expect(all).not.toMatch(/Deepgram을 쓰면 받지|or use Deepgram/);
+    expect(strings(en).join("\n")).toMatch(/speakers are still separated on your Mac by Nemotron 3/);
+    expect(strings(ko).join("\n")).toMatch(/화자는 그때도 이 Mac의 Nemotron 3가 나눕니다/);
   });
 
   it("the download URL follows the latest release", () => {

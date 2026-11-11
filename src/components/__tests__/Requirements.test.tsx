@@ -17,6 +17,13 @@ describe("Requirements", () => {
     expect(screen.getByText(/interface and minutes are in Korean/)).toBeInTheDocument();
   });
 
+  it("says cloud engines with speaker separation still download Nemotron", () => {
+    render(<Requirements dict={en.requirements} />);
+    const storage = screen.getByText(/On-Mac transcription downloads about 845 MB/);
+    expect(storage).toHaveTextContent(/With Deepgram or Soniox and speaker separation on, Nemotron \(about 199 MB\)/);
+    expect(storage).not.toHaveTextContent(/use Deepgram/);
+  });
+
   it("lists the known limitations", () => {
     render(<Requirements dict={en.requirements} />);
     expect(screen.getByRole("heading", { level: 3, name: "Known limitations" })).toBeInTheDocument();
@@ -29,5 +36,6 @@ describe("Requirements", () => {
     render(<Requirements dict={ko.requirements} />);
     expect(screen.getByRole("heading", { level: 3, name: "알려진 한계" })).toBeInTheDocument();
     expect(screen.getByText(/Intel Mac은 지원하지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/Deepgram·Soniox를 쓸 때도 화자 구분을 켜 두면 Nemotron\(약 199MB\)/)).toBeInTheDocument();
   });
 });

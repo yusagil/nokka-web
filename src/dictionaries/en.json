@@ -18,7 +18,7 @@
     "headline": "Record the meeting.\nYour Mac writes it down.",
     "subheadline": "Nokka starts recording the moment you press the button, and by default transcribes and separates speakers on your Mac while people talk. Connect your own Claude, OpenAI or ChatGPT account only when you want minutes.",
     "cta": "Download for macOS",
-    "ctaHint": "(DMG, about 28 MB)",
+    "ctaHint": "(DMG, about 30 MB)",
     "secondary": "See how it works",
     "meta": ["macOS 14 or later", "Apple silicon only", "App in Korean"],
     "screenshotAlt": "Nokka's live transcript window. The speaker bar at the top has chips with pencil icons for 'Speaker 1' and a named participant; their lines run down the left, and the notes panel on the right holds a note taken at 00:01:05 that says the budget needs confirming. The interface is in Korean.",
@@ -32,10 +32,10 @@
       "record": {
         "label": "Record",
         "title": "Recording starts the moment you press it",
-        "description": "Nokka doesn't wait for the transcription model to download or get ready. With default settings, the part recorded before the model was ready is transcribed from the original audio on your Mac after you stop.",
+        "description": "Nokka doesn't wait for the transcription model to download or get ready. Anything the live transcript missed, such as the part before the model was ready, is transcribed from the original audio on your Mac after you stop. Whichever transcription engine you use, no audio is sent for this.",
         "points": [
           "When Zoom, Microsoft Teams, Slack huddles, Webex, Discord or Google Meet in a browser start using the mic or speakers, Nokka offers to record. For each app, choose ask, record automatically, or never.",
-          "Record audio only, or the screen too (full screen, a region or a window). Computer audio and microphone are switched on and off separately.",
+          "Record audio only, or the screen too (full screen, a region or a window). ⌘⇧R opens a chooser for the recording mode where your pointer is. Computer audio and microphone are switched on and off separately.",
           "Check your sound before recording. While recording, Nokka watches for a dropped mic or silent computer audio, and carries on when the same earbuds reconnect.",
           "Warnings show up where you're looking: the transcript window, the floating bar, the menu bar or a notification."
         ],
@@ -47,26 +47,29 @@
       "transcribe": {
         "label": "Transcribe",
         "title": "It writes down who said what, as they say it",
-        "description": "Live transcription runs on your Mac with Whisper, and speaker separation with Nemotron. Click a speaker in the bar at the top, or the speaker's name on a line, and a naming row opens right in the window. Type a name or pick a calendar attendee, your own name or a recent one; it carries through to the library, transcript files and minutes.",
+        "description": "With default settings, live transcription runs on your Mac with Whisper, and speaker separation with Nemotron 3. Click a speaker in the bar at the top, or the speaker's name on a line, and a naming row opens right in the window. Type a name or pick a calendar attendee, your own name or a recent one; it carries through to the library, transcript files and minutes.",
         "points": [
           "Notes typed in the panel next to the transcript are timestamped and included when minutes are written. ⌘⇧B bookmarks the current moment.",
-          "After the recording, you can name speakers while listening to a 5-second sample of each. Voices aren't stored.",
+          "Move a single misattributed line to another speaker, or split it out as a new person. Copy a line, a selection or the whole transcript.",
+          "When the recording ends, Nokka separates speakers once more over the whole recording, fixing numbers that changed midway and two people merged into one. Names you gave during the recording stay. You can also name speakers while listening to a 5-second sample of each; voices aren't stored.",
           "Add attendee names, product names and in-house terms to the glossary; they're used as transcription hints and as a reference for minutes.",
-          "Choose Deepgram to transcribe in the cloud with your own API key. Only then does audio go to Deepgram."
+          "Choose Deepgram or Soniox to transcribe in the cloud with your own API key. Only then does audio go to that service, and speakers are still separated on your Mac by Nemotron 3.",
+          "If the cloud connection drops, or there's no internet when a recording starts, an engine on your Mac (Apple on macOS 26, or Whisper if installed) takes over within 1–2 seconds and captions keep coming. When the connection is back, Nokka returns to the cloud on its own, with the same speaker numbers and names. A problem with your API key or balance shows an alert."
         ],
         "imageAlt": "The live transcript window after clicking 'Speaker 1': a naming row has opened below the speaker bar, with a name field and two suggested names, above the speakers' lines. The interface is in Korean.",
         "imageCaption": "Clicking 'Speaker 1' opens a naming row right below it. The name you choose goes on every line from that speaker."
       },
       "minutes": {
         "label": "Tidy up",
-        "title": "It asks about the unclear parts, then writes the minutes",
-        "description": "With an LLM connected, Nokka tidies the transcript and leaves questions about anything that needs a judgment call: names, terms, dates. Once you answer, it writes minutes and tags each item with the time of the line it's based on. The original transcript is never overwritten.",
+        "title": "It asks only what it must, then writes the minutes",
+        "description": "With an LLM connected, Nokka tidies the transcript and asks only about things that would change the minutes if wrong and can't be answered from anywhere in the recording, such as a password, date, amount or name. That's at most 10 questions per recording, and sometimes none. Everything else is decided from context and the rest of the recording, and can be reopened later. Once you answer, it writes minutes and tags each item with the time of the line it's based on. The original transcript is never overwritten.",
         "points": [
           "Connect Claude or OpenAI with your API key, or sign in with a ChatGPT subscription (experimental).",
-          "Click a citation chip to play from 5 seconds before that line. Keep several templates, and edit the minutes yourself.",
+          "You can also make quick minutes straight from the transcript, without waiting for the tidy-up. Numbers, dates and owners that need checking are collected under open questions.",
+          "Long meetings are tidied up in a few minutes. If the network drops or the app is restarted, it picks up after the last finished part.",
+          "Click a citation chip to play from 5 seconds before that line. Keep several templates, including a knowledge-base one that puts decisions and action items first, and edit the minutes yourself.",
           "Turn on automatic tidy-up and its questions appear in a small panel on the right of the screen, even while another app is in front.",
-          "Confirmed terms and meeting context stay on your Mac as Markdown memory, used for the next tidy-up and minutes.",
-          "'Ask your meetings' shows which memory items and meetings it would send, and sends nothing until you press Send."
+          "Confirmed terms and meeting context stay on your Mac as Markdown memory, used for the next tidy-up and minutes. 'Ask your meetings' shows which memory items and meetings it would send, and sends nothing until you press Send."
         ],
         "example": {
           "label": "Example minutes, in Korean",
@@ -104,8 +107,9 @@
       "notApplicable": "Not applicable",
       "rows": [
         { "stage": "Recordings", "local": "This Mac · your recordings folder", "connected": "Not applicable" },
-        { "stage": "Live transcription and speakers", "local": "Whisper + Nemotron · this Mac", "connected": "Deepgram · audio sent while recording" },
-        { "stage": "Re-transcription and gap filling", "local": "Apple or Whisper · this Mac", "connected": "Deepgram · audio sent" },
+        { "stage": "Live transcription and speakers", "local": "Whisper + Nemotron 3 · this Mac", "connected": "Deepgram or Soniox · audio sent while recording, speakers still on this Mac" },
+        { "stage": "Filling gaps after a recording", "local": "Whisper, else Apple · this Mac, whatever the engine", "connected": "Not applicable" },
+        { "stage": "Re-transcribing from the library", "local": "Apple or Whisper · this Mac", "connected": "Deepgram or Soniox · audio sent" },
         { "stage": "Tidy-up, questions, minutes, Ask your meetings", "local": "Off until you connect one", "connected": "Claude, OpenAI or ChatGPT · transcript and related memory sent" },
         { "stage": "Term and meeting memory", "local": "This Mac · Markdown files", "connected": "Not applicable" },
         { "stage": "Notion and Slack export", "local": "Off until you connect one", "connected": "Sent only when you export" }
@@ -113,13 +117,15 @@
     },
     "localOnly": {
       "title": "Local-only mode",
-      "description": "Blocks everything except model downloads. Deepgram switches to an engine on your Mac, and tidy-up, minutes, Ask your meetings, Notion and Slack are turned off."
+      "description": "Blocks everything except model downloads and update checks. Deepgram and Soniox switch to engines on your Mac, and tidy-up, minutes, Ask your meetings, Notion and Slack are turned off."
     },
     "facts": [
-      "Deepgram, Claude and OpenAI keys and the ChatGPT sign-in are stored in the macOS Keychain.",
+      "Deepgram, Soniox, Claude and OpenAI keys and the ChatGPT sign-in are stored in the macOS Keychain.",
       "No analytics or tracking SDKs in the app.",
-      "Deepgram's connection check only verifies the key and sends no audio.",
-      "Models for on-Mac transcription are downloaded from the internet on first use (about 845 MB)."
+      "The Deepgram and Soniox connection check only verifies the key and sends no audio. The same check is used to see whether a dropped connection is back.",
+      "After-recording transcription with Soniox deletes the uploaded audio and transcript from Soniox once the results arrive.",
+      "Models for on-Mac transcription are downloaded from the internet on first use (about 845 MB). With a cloud live engine on macOS 26, Apple's speech recognition assets are downloaded ahead of time so your Mac can take over if the connection drops.",
+      "Update checks read the release list from nokka-web on GitHub. Automatic checks can be turned off in Settings › General › Updates."
     ]
   },
   "files": {
@@ -128,14 +134,14 @@
     "intro": "One recording, one folder. Transcript, subtitles, minutes and metadata sit side by side, ready for your knowledge base or automations.",
     "treeLabel": "What one recording folder under ~/Movies/Nokka/ contains",
     "tree": [
-      { "name": "Nokka_2026-10-26_10-30-00.m4a", "note": "Audio recording (.mp4 for screen recordings)" },
+      { "name": "Nokka_2026-10-26_10-30-00.m4a", "note": "Audio recording; the first track mixes computer audio and mic (.mp4 for screen recordings)" },
       { "name": "Nokka_2026-10-26_10-30-00.txt · .srt", "note": "Transcript and subtitles" },
       { "name": "transcript.json", "note": "Times, speaker and text per segment" },
       { "name": "summary.md", "note": "Minutes, if created" },
       { "name": "nokka.json", "note": "Title, attendees, speaker names, notes" }
     ],
     "formatsHeading": "Export to",
-    "formats": ["Markdown · Obsidian", "Word (.docx)", "PDF", "Hangul (.hwpx)", "Notion", "Slack", "Trim · GIF (screen recordings)"],
+    "formats": ["Markdown · Obsidian", "Word (.docx)", "PDF", "Hangul (.hwpx)", "Notion", "Slack", "One-track audio (.m4a)", "Trim · GIF (screen recordings)"],
     "formatsNote": "Pick what to include: minutes, transcript, timestamps, speaker names, bookmarks. Slack always gets the minutes only. Point Nokka at an Obsidian folder and it saves a note whenever minutes are created."
   },
   "features": {
@@ -147,8 +153,8 @@
         "description": "Start and stop right from the menu bar. ⌘⇧R record, ⌘⇧P pause, ⌘⇧M mic, ⌘⇧B bookmark. Shortcuts can be changed and need Accessibility permission."
       },
       "tracks": {
-        "title": "Separate audio tracks",
-        "description": "Computer audio and microphone are saved as separate tracks, with RNNoise noise suppression on the mic. The unsuppressed original is kept as well and used for transcription."
+        "title": "Separate tracks, plus a mix",
+        "description": "Computer audio and microphone are saved as separate tracks, and in audio recordings the first track mixes both, so other transcription tools that read only one track still hear everyone. The mic gets RNNoise noise suppression; the unsuppressed original is kept as well and used for transcription."
       },
       "meetingEnd": {
         "title": "When the meeting ends",
@@ -168,7 +174,7 @@
       },
       "screen": {
         "title": "Screen recording",
-        "description": "Full screen, a region or a window, with H.264 hardware encoding. Windows in other Spaces can be picked, and a webcam overlay is available."
+        "description": "Full screen, a region or a window, with H.264 hardware encoding. Text-heavy documents, code and tables stay readable, at about 5 GB per hour for a webinar window. Windows in other Spaces can be picked, and a webcam overlay is available."
       },
       "safety": {
         "title": "Recordings that survive a crash",
@@ -184,14 +190,16 @@
       { "term": "macOS", "detail": "14 Sonoma or later" },
       { "term": "Mac", "detail": "Apple silicon. Intel Macs are not supported." },
       { "term": "Permissions", "detail": "Microphone. Screen & System Audio Recording only when you record computer audio or the screen. Setup asks only for what your chosen use needs; shortcuts, calendar and webcam ask when you use them." },
-      { "term": "Storage", "detail": "The DMG is about 28 MB. On-Mac transcription downloads about 845 MB of models (Whisper + Nemotron) on first use; not needed if you only record or use Deepgram." },
+      { "term": "Storage", "detail": "The DMG is about 30 MB. On-Mac transcription downloads about 845 MB of models (Whisper + Nemotron) on first use. With Deepgram or Soniox and speaker separation on, Nemotron (about 199 MB) is still downloaded once. Nothing is needed if you only record." },
       { "term": "Language", "detail": "The app's interface and minutes are in Korean. The transcription language is chosen per recording: Korean, English, Japanese, Chinese, Spanish, German or French." },
-      { "term": "Install", "detail": "The app is signed with a Developer ID and notarized by Apple. The release notes list the file's SHA-256." },
+      { "term": "Install", "detail": "The app is signed with a Developer ID and notarized by Apple. When a new version is out, the app shows what changed and, once you choose to install, checks its signature before replacing itself. The release notes list the file's SHA-256." },
       { "term": "Built with", "detail": "SwiftUI and ScreenCaptureKit. A native macOS app." }
     ],
     "limitsHeading": "Known limitations",
     "limits": [
       "Each recording is transcribed in one language. With Korean selected, Whisper and Deepgram drop English sentences, and the Apple engine transcribes them with broken spelling.",
+      "While the Apple engine on your Mac is standing in for a cloud engine, lines run long, so two people speaking back to back can end up in one line under one speaker.",
+      "If a cloud connection drops and no engine on your Mac can take over (for example, Whisper isn't installed on macOS 14 or 15), live captions try to reconnect for about 2 minutes, and the missing part is filled in on your Mac after the recording.",
       "After-recording Whisper transcription can pull the first sentence's start time back into the silence before it.",
       "Live speaker separation handles the mic and computer audio separately. The same person picked up by both isn't merged automatically.",
       "If computer audio stops during a recording, for example after switching output devices, Nokka warns you but doesn't restart the capture. Stop and start the recording again.",
@@ -201,10 +209,10 @@
   },
   "downloadCta": {
     "heading": "Try it on your next meeting",
-    "subheading": "Open the DMG and drag Nokka to Applications. On first launch, choose what to record and how to transcribe, and Nokka asks only for the permissions that needs.",
+    "subheading": "Open the DMG and drag Nokka to Applications. On first launch, choose what to record and how to transcribe, and Nokka asks only for the permissions that needs. New versions install from inside the app.",
     "cta": "Download for macOS",
-    "ctaHint": "(DMG, about 28 MB)",
-    "meta": ["macOS 14 or later", "Apple silicon", "DMG about 28 MB"],
+    "ctaHint": "(DMG, about 30 MB)",
+    "meta": ["macOS 14 or later", "Apple silicon", "DMG about 30 MB"],
     "releaseLink": "Release notes and SHA-256"
   },
   "footer": {
