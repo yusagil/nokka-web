@@ -25,6 +25,7 @@ describe("DownloadCTA", () => {
     render(<DownloadCTA dict={en.downloadCta} />);
     expect(screen.getByText("macOS 14 or later")).toBeInTheDocument();
     expect(screen.getByText("Apple silicon")).toBeInTheDocument();
+    expect(screen.getByText(/New versions install from inside the app/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /release notes and sha-256/i })).toHaveAttribute(
       "href",
       LATEST_RELEASE_URL

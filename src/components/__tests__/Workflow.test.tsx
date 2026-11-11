@@ -42,8 +42,33 @@ describe("Workflow", () => {
 
   it("says when audio and transcripts leave the Mac", () => {
     render(<Workflow dict={en.how} />);
-    expect(screen.getByText(/Only then does audio go to Deepgram/)).toBeInTheDocument();
+    expect(screen.getByText(/Choose Deepgram or Soniox/)).toHaveTextContent(
+      /Only then does audio go to that service, and speakers are still separated on your Mac by Nemotron 3/
+    );
+    expect(screen.getByText(/no audio is sent for this/)).toBeInTheDocument();
     expect(screen.getByText(/sends nothing until you press Send/)).toBeInTheDocument();
+  });
+
+  it("explains that this Mac takes over when a cloud engine drops", () => {
+    render(<Workflow dict={en.how} />);
+    const handover = screen.getByText(/takes over within 1–2 seconds/);
+    expect(handover).toHaveTextContent(/returns to the cloud on its own/);
+    expect(handover).toHaveTextContent(/same speaker numbers and names/);
+    expect(handover).toHaveTextContent(/API key or balance shows an alert/);
+  });
+
+  it("asks only the questions it must, and offers quick minutes", () => {
+    render(<Workflow dict={en.how} />);
+    expect(screen.getByText(/at most 10 questions per recording, and sometimes none/)).toBeInTheDocument();
+    expect(screen.getByText(/quick minutes straight from the transcript/)).toBeInTheDocument();
+  });
+
+  it("describes cloud engines and the handover in Korean", () => {
+    render(<Workflow dict={ko.how} />);
+    expect(screen.getByText(/Deepgram이나 Soniox를 고르면/)).toHaveTextContent(
+      /화자는 그때도 이 Mac의 Nemotron 3가 나눕니다/
+    );
+    expect(screen.getByText(/1~2초 안에 이어 받아/)).toHaveTextContent(/화자 번호와 이름도 그대로 이어집니다/);
   });
 
   it("marks the example minutes as Korean text and labels citation chips", () => {

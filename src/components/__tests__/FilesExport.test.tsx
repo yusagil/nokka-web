@@ -15,11 +15,20 @@ describe("FilesExport", () => {
     for (const name of ["transcript.json", "summary.md", "nokka.json"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
+    expect(screen.getByText(/the first track mixes computer audio and mic/)).toBeInTheDocument();
   });
 
   it("lists every export format", () => {
     render(<FilesExport dict={en.files} />);
-    for (const format of ["Markdown · Obsidian", "Word (.docx)", "PDF", "Hangul (.hwpx)", "Notion", "Slack"]) {
+    for (const format of [
+      "Markdown · Obsidian",
+      "Word (.docx)",
+      "PDF",
+      "Hangul (.hwpx)",
+      "Notion",
+      "Slack",
+      "One-track audio (.m4a)",
+    ]) {
       expect(screen.getByText(format)).toBeInTheDocument();
     }
   });
