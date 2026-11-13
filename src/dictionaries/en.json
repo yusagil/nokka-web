@@ -158,7 +158,7 @@
       },
       "meetingEnd": {
         "title": "When the meeting ends",
-        "description": "Automatically recorded meetings stop after a 10-second countdown, and short automatic recordings ask before they're kept. You can also have recording stop after a long silence."
+        "description": "Recordings linked to a detected meeting stop and save after the end notice’s 5-second countdown. Choose Keep recording or close the notice to cancel automatic stop; short automatic recordings ask whether to keep them."
       },
       "calendar": {
         "title": "Calendar (optional)",
