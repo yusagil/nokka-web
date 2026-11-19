@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { Dictionary } from "@/dictionaries";
-import { ISSUES_URL, RELEASES_URL } from "@/lib/links";
+import { ISSUES_URL } from "@/lib/links";
 
 interface FooterProps {
   dict: Dictionary["footer"];
@@ -17,14 +17,6 @@ export default function Footer({ dict }: FooterProps) {
         </div>
         <nav aria-label={dict.linksLabel}>
           <ul className="flex items-center gap-6">
-            <li>
-              <a
-                href={RELEASES_URL}
-                className="inline-flex min-h-11 items-center text-fg-muted underline-offset-4 hover:underline"
-              >
-                {dict.releaseNotes}
-              </a>
-            </li>
             <li>
               <a
                 href={ISSUES_URL}

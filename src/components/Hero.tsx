@@ -1,5 +1,4 @@
 import type { Dictionary } from "@/dictionaries";
-import DownloadButton from "./DownloadButton";
 import Screenshot from "./Screenshot";
 
 interface HeroProps {
@@ -46,21 +45,16 @@ export default function Hero({ dict }: HeroProps) {
           {dict.subheadline}
         </p>
 
-        <div
-          className="motion-safe:animate-rise mt-8 flex flex-col items-center gap-4 sm:flex-row"
+        <a
+          href="#how"
+          className="motion-safe:animate-rise mt-8 inline-flex h-12 items-center rounded-full px-5 text-base font-medium text-fg-muted transition-colors duration-100 hover:text-fg"
           style={rise(300)}
         >
-          <DownloadButton label={dict.cta} hint={dict.ctaHint} />
-          <a
-            href="#how"
-            className="inline-flex h-12 items-center rounded-full px-5 text-base font-medium text-fg-muted transition-colors duration-100 hover:text-fg"
-          >
-            {dict.secondary}
-            <span aria-hidden="true" className="ml-1.5">
-              ↓
-            </span>
-          </a>
-        </div>
+          {dict.secondary}
+          <span aria-hidden="true" className="ml-1.5">
+            ↓
+          </span>
+        </a>
 
         <ul
           className="motion-safe:animate-rise mt-4 flex flex-wrap justify-center gap-x-2 text-sm text-fg-subtle"

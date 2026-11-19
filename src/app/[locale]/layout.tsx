@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { hasLocale, getDictionary, locales } from "@/dictionaries";
-import { DOWNLOAD_URL, SITE_URL } from "@/lib/links";
+import { SITE_URL } from "@/lib/links";
 
 export async function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -82,7 +82,6 @@ export default async function LocaleLayout({
     operatingSystem: "macOS 14 or later",
     softwareRequirements: "Apple silicon Mac, macOS 14 Sonoma or later",
     applicationCategory: "BusinessApplication",
-    downloadUrl: DOWNLOAD_URL,
     url: `${SITE_URL}/${locale}`,
     inLanguage: locale,
     description: dict.meta.description,

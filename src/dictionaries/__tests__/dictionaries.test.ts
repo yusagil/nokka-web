@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import en from "../en.json";
 import ko from "../ko.json";
-import { DOWNLOAD_URL } from "@/lib/links";
 
 /** Every key path with its value type, and array lengths, so en and ko stay in step. */
 function shape(value: unknown, path = ""): string[] {
@@ -70,11 +69,5 @@ describe("dictionaries", () => {
     expect(all).not.toMatch(/Deepgram을 쓰면 받지|or use Deepgram/);
     expect(strings(en).join("\n")).toMatch(/speakers are still separated on your Mac by Nemotron 3/);
     expect(strings(ko).join("\n")).toMatch(/화자는 그때도 이 Mac의 Nemotron 3가 나눕니다/);
-  });
-
-  it("the download URL follows the latest release", () => {
-    expect(DOWNLOAD_URL).toBe(
-      "https://github.com/yusagil/nokka-web/releases/latest/download/Nokka.dmg"
-    );
   });
 });

@@ -10,15 +10,12 @@
     "how": "How it works",
     "privacy": "Data paths",
     "requirements": "Requirements",
-    "download": "Download",
     "languageLabel": "Language"
   },
   "hero": {
     "eyebrow": "Meeting recorder for Mac",
     "headline": "Record the meeting.\nYour Mac writes it down.",
     "subheadline": "Nokka starts recording the moment you press the button, and by default transcribes and separates speakers on your Mac while people talk. Connect your own Claude, OpenAI or ChatGPT account only when you want minutes.",
-    "cta": "Download for macOS",
-    "ctaHint": "(DMG, about 30 MB)",
     "secondary": "See how it works",
     "meta": ["macOS 14 or later", "Apple silicon only", "App in Korean"],
     "screenshotAlt": "Nokka's live transcript window. The speaker bar at the top has chips with pencil icons for 'Speaker 1' and a named participant; their lines run down the left, and the notes panel on the right holds a note taken at 00:01:05 that says the budget needs confirming. The interface is in Korean.",
@@ -192,7 +189,7 @@
       { "term": "Permissions", "detail": "Microphone. Screen & System Audio Recording only when you record computer audio or the screen. Setup asks only for what your chosen use needs; shortcuts, calendar and webcam ask when you use them." },
       { "term": "Storage", "detail": "The DMG is about 30 MB. On-Mac transcription downloads about 845 MB of models (Whisper + Nemotron) on first use. With Deepgram or Soniox and speaker separation on, Nemotron (about 199 MB) is still downloaded once. Nothing is needed if you only record." },
       { "term": "Language", "detail": "The app's interface and minutes are in Korean. The transcription language is chosen per recording: Korean, English, Japanese, Chinese, Spanish, German or French." },
-      { "term": "Install", "detail": "The app is signed with a Developer ID and notarized by Apple. When a new version is out, the app shows what changed and, once you choose to install, checks its signature before replacing itself. The release notes list the file's SHA-256." },
+      { "term": "Install", "detail": "The app is signed with a Developer ID and notarized by Apple. When a new version is out, the app shows what changed and, once you choose to install, checks its signature before replacing itself." },
       { "term": "Built with", "detail": "SwiftUI and ScreenCaptureKit. A native macOS app." }
     ],
     "limitsHeading": "Known limitations",
@@ -207,17 +204,8 @@
       "ChatGPT subscription sign-in is experimental and may stop working if OpenAI changes its policy. API-key connections are unaffected."
     ]
   },
-  "downloadCta": {
-    "heading": "Try it on your next meeting",
-    "subheading": "Open the DMG and drag Nokka to Applications. On first launch, choose what to record and how to transcribe, and Nokka asks only for the permissions that needs. New versions install from inside the app.",
-    "cta": "Download for macOS",
-    "ctaHint": "(DMG, about 30 MB)",
-    "meta": ["macOS 14 or later", "Apple silicon", "DMG about 30 MB"],
-    "releaseLink": "Release notes and SHA-256"
-  },
   "footer": {
     "copyright": "© 2026 Nokka",
-    "releaseNotes": "Release notes",
     "contact": "Contact (GitHub)",
     "linksLabel": "Site links"
   }

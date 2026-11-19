@@ -40,28 +40,20 @@ export default function Navbar({ dict, locale }: NavbarProps) {
           ))}
         </ul>
 
-        <div className="flex items-center gap-3 sm:gap-5">
-          <div role="group" aria-label={dict.languageLabel} className="flex items-center text-sm">
-            <span aria-current="true" className="font-medium text-fg">
-              {LOCALE_LABELS[locale]}
-            </span>
-            <span aria-hidden="true" className="px-1.5 text-fg-subtle">
-              |
-            </span>
-            <a
-              href={`/${otherLocale}`}
-              lang={otherLocale}
-              hrefLang={otherLocale}
-              className="inline-flex min-h-11 items-center px-1 text-fg-subtle transition-colors duration-100 hover:text-fg"
-            >
-              {LOCALE_LABELS[otherLocale]}
-            </a>
-          </div>
+        <div role="group" aria-label={dict.languageLabel} className="flex items-center text-sm">
+          <span aria-current="true" className="font-medium text-fg">
+            {LOCALE_LABELS[locale]}
+          </span>
+          <span aria-hidden="true" className="px-1.5 text-fg-subtle">
+            |
+          </span>
           <a
-            href="#download"
-            className="inline-flex h-10 items-center rounded-full bg-accent-strong px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-accent-stronger"
+            href={`/${otherLocale}`}
+            lang={otherLocale}
+            hrefLang={otherLocale}
+            className="inline-flex min-h-11 items-center px-1 text-fg-subtle transition-colors duration-100 hover:text-fg"
           >
-            {dict.download}
+            {LOCALE_LABELS[otherLocale]}
           </a>
         </div>
       </nav>

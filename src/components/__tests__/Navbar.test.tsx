@@ -19,7 +19,7 @@ describe("Navbar", () => {
       "href",
       "#requirements"
     );
-    expect(within(nav).getByRole("link", { name: "Download" })).toHaveAttribute("href", "#download");
+    expect(within(nav).queryByRole("link", { name: /download/i })).not.toBeInTheDocument();
   });
 
   it("is fixed with a backdrop blur", () => {

@@ -28,7 +28,5 @@ middleware).
 
 ## Download link
 
-The download buttons point at `https://github.com/yusagil/nokka-web/releases/latest/download/Nokka.dmg`
-(`src/lib/links.ts`), so publishing a new GitHub Release with an asset named exactly `Nokka.dmg`, marked latest
-(not draft or prerelease), updates the site without a code change. Build numbers and SHA-256 checksums belong in
-the release notes, not on the site.
+The site has no download button or link to GitHub Releases for now. Releases themselves are unchanged; the app's
+update check still reads them. Build numbers and SHA-256 checksums belong in the release notes, not on the site.

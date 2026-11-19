@@ -10,17 +10,14 @@
     "how": "사용 흐름",
     "privacy": "데이터 경로",
     "requirements": "시작하기 전에",
-    "download": "다운로드",
     "languageLabel": "언어 선택"
   },
   "hero": {
     "eyebrow": "Mac용 미팅 레코더",
     "headline": "회의를 녹음하면,\n이 Mac이 받아 적습니다.",
     "subheadline": "누르는 즉시 녹음을 시작하고, 말하는 동안 전사와 화자 구분을 기본적으로 이 Mac에서 처리합니다. 회의록이 필요할 때만 내 Claude·OpenAI·ChatGPT 계정을 연결하세요.",
-    "cta": "macOS용 다운로드",
-    "ctaHint": "(DMG, 약 30MB)",
     "secondary": "어떻게 쓰는지 보기",
-    "meta": ["macOS 14 이상", "Apple silicon 전용", "DMG 약 30MB"],
+    "meta": ["macOS 14 이상", "Apple silicon 전용", "한국어 앱"],
     "screenshotAlt": "Nokka 실시간 전사 창. 위쪽 화자 막대에 연필 표시가 붙은 '화자 1'·'박과장' 칩이 있고, 왼쪽에는 두 화자의 발언이, 오른쪽 메모 칸에는 00:01:05에 적은 '예산 확정 필요' 메모가 있습니다.",
     "caption": "녹음 중 실시간 전사 창. 화자를 눌러 이름을 붙이고, 오른쪽 칸에 메모합니다. 화면 속 대화는 예시입니다."
   },
@@ -192,7 +189,7 @@
       { "term": "권한", "detail": "마이크. 컴퓨터 소리나 화면을 녹음할 때만 화면 및 시스템 오디오 녹음 권한이 필요합니다. 첫 설정에서 고른 용도에 필요한 권한만 요청하고, 단축키·캘린더·웹캠은 쓸 때 따로 묻습니다." },
       { "term": "저장 공간", "detail": "DMG 약 30MB. 이 Mac에서 전사하려면 첫 사용 때 모델 약 845MB(Whisper + Nemotron)를 내려받습니다. Deepgram·Soniox를 쓸 때도 화자 구분을 켜 두면 Nemotron(약 199MB)을 한 번 받습니다. 녹음만 하면 받지 않아도 됩니다." },
       { "term": "언어", "detail": "앱 화면과 회의록은 한국어입니다. 전사 언어는 녹음마다 하나를 고릅니다(한국어·영어·일본어·중국어·스페인어·독일어·프랑스어)." },
-      { "term": "설치", "detail": "앱은 Developer ID로 서명되고 Apple 공증을 받았습니다. 새 버전이 나오면 앱이 변경 내용을 보여 주고, 설치를 누르면 서명을 확인한 뒤 바꿉니다. 릴리스 노트에서 파일의 SHA-256을 확인할 수 있습니다." },
+      { "term": "설치", "detail": "앱은 Developer ID로 서명되고 Apple 공증을 받았습니다. 새 버전이 나오면 앱이 변경 내용을 보여 주고, 설치를 누르면 서명을 확인한 뒤 바꿉니다." },
       { "term": "만든 방식", "detail": "SwiftUI와 ScreenCaptureKit으로 만든 macOS 네이티브 앱입니다." }
     ],
     "limitsHeading": "알려진 한계",
@@ -207,17 +204,8 @@
       "ChatGPT 구독 로그인은 실험 기능이라 OpenAI 정책에 따라 동작하지 않을 수 있습니다. API 키 연결은 영향이 없습니다."
     ]
   },
-  "downloadCta": {
-    "heading": "다음 회의에서 써 보세요",
-    "subheading": "DMG를 열고 Nokka를 응용 프로그램 폴더로 옮기면 됩니다. 처음 열면 녹음할 소리와 전사 방식을 고르고, 거기에 필요한 권한만 요청합니다. 새 버전은 앱 안에서 받아 설치합니다.",
-    "cta": "macOS용 다운로드",
-    "ctaHint": "(DMG, 약 30MB)",
-    "meta": ["macOS 14 이상", "Apple silicon", "DMG 약 30MB"],
-    "releaseLink": "릴리스 노트와 SHA-256 보기"
-  },
   "footer": {
     "copyright": "© 2026 Nokka",
-    "releaseNotes": "릴리스 노트",
     "contact": "문의 (GitHub)",
     "linksLabel": "사이트 링크"
   }

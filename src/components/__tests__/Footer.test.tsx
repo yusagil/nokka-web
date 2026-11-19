@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import en from "@/dictionaries/en.json";
-import { ISSUES_URL, RELEASES_URL } from "@/lib/links";
+import { ISSUES_URL } from "@/lib/links";
 import Footer from "../Footer";
 
 describe("Footer", () => {
@@ -11,12 +11,9 @@ describe("Footer", () => {
     expect(screen.getByText(/© 2026/)).toBeInTheDocument();
   });
 
-  it("links release notes to GitHub Releases instead of a missing page", () => {
+  it("does not link to GitHub Releases", () => {
     render(<Footer dict={en.footer} />);
-    expect(screen.getByRole("link", { name: "Release notes" })).toHaveAttribute(
-      "href",
-      RELEASES_URL
-    );
+    expect(screen.queryByRole("link", { name: /release/i })).not.toBeInTheDocument();
   });
 
   it("links contact to GitHub issues", () => {

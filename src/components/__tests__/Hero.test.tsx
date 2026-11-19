@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import en from "@/dictionaries/en.json";
 import ko from "@/dictionaries/ko.json";
-import { DOWNLOAD_URL } from "@/lib/links";
 import Hero from "../Hero";
 
 // The headline has a deliberate line break; compare with whitespace collapsed.
@@ -23,11 +22,10 @@ describe("Hero", () => {
     expect(screen.getByText(/transcribes and separates speakers on your Mac/)).toBeInTheDocument();
   });
 
-  it("download link points at the latest release DMG and names the file type", () => {
+  it("links only to the how-it-works section, with no download link", () => {
     render(<Hero dict={en.hero} />);
-    const link = screen.getByRole("link", { name: /download for macos/i });
-    expect(link).toHaveAttribute("href", DOWNLOAD_URL);
-    expect(link).toHaveAccessibleName(/DMG/);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /see how it works/i })).toHaveAttribute("href", "#how");
   });
 
   it("lists macOS 14 and Apple silicon, without Intel", () => {
@@ -51,9 +49,7 @@ describe("Hero", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: sameText(ko.hero.headline) })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /macOS용 다운로드/ })).toHaveAttribute(
-      "href",
-      DOWNLOAD_URL
-    );
+    expect(screen.getByRole("link", { name: /어떻게 쓰는지 보기/ })).toHaveAttribute("href", "#how");
+    expect(screen.queryByText(/다운로드|DMG/)).not.toBeInTheDocument();
   });
 });
