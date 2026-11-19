@@ -10,12 +10,14 @@
     "how": "How it works",
     "privacy": "Data paths",
     "requirements": "Requirements",
+    "apply": "Request access",
     "languageLabel": "Language"
   },
   "hero": {
     "eyebrow": "Meeting recorder for Mac",
     "headline": "Record the meeting.\nYour Mac writes it down.",
     "subheadline": "Nokka starts recording the moment you press the button, and by default transcribes and separates speakers on your Mac while people talk. Connect your own Claude, OpenAI or ChatGPT account only when you want minutes.",
+    "cta": "Request access",
     "secondary": "See how it works",
     "meta": ["macOS 14 or later", "Apple silicon only", "App in Korean"],
     "screenshotAlt": "Nokka's live transcript window. The speaker bar at the top has chips with pencil icons for 'Speaker 1' and a named participant; their lines run down the left, and the notes panel on the right holds a note taken at 00:01:05 that says the budget needs confirming. The interface is in Korean.",
@@ -203,6 +205,32 @@
       "On macOS 14 and 15, after-recording transcription with the Apple engine can cut off results for long files.",
       "ChatGPT subscription sign-in is experimental and may stop working if OpenAI changes its policy. API-key connections are unaffected."
     ]
+  },
+  "apply": {
+    "heading": "Request access",
+    "intro": "Leave your name and email.",
+    "noscript": "Turn on JavaScript in your browser to send a request.",
+    "form": {
+      "nameLabel": "Name",
+      "emailLabel": "Email",
+      "purpose": "We ask for your name and email to receive your access request and to contact you about it.",
+      "submit": "Submit request",
+      "submitting": "Submitting…",
+      "doneHeading": "Your request has been received",
+      "doneBody": "Thank you.",
+      "errors": {
+        "nameRequired": "Enter your name.",
+        "nameTooLong": "Use 100 characters or fewer.",
+        "nameInvalid": "Your name contains characters that can't be used.",
+        "emailRequired": "Enter your email.",
+        "emailTooLong": "Use 254 characters or fewer.",
+        "emailInvalid": "Enter an email address like name@example.com.",
+        "rateLimited": "Too many requests. Please try again shortly.",
+        "tooLarge": "Check what you entered and try again.",
+        "rejected": "We couldn't take your request. Please try again shortly.",
+        "unconfirmed": "We couldn't confirm your request. Please try again shortly."
+      }
+    }
   },
   "footer": {
     "copyright": "© 2026 Nokka",

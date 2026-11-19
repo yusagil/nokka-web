@@ -10,12 +10,14 @@
     "how": "사용 흐름",
     "privacy": "데이터 경로",
     "requirements": "시작하기 전에",
+    "apply": "사용 신청하기",
     "languageLabel": "언어 선택"
   },
   "hero": {
     "eyebrow": "Mac용 미팅 레코더",
     "headline": "회의를 녹음하면,\n이 Mac이 받아 적습니다.",
     "subheadline": "누르는 즉시 녹음을 시작하고, 말하는 동안 전사와 화자 구분을 기본적으로 이 Mac에서 처리합니다. 회의록이 필요할 때만 내 Claude·OpenAI·ChatGPT 계정을 연결하세요.",
+    "cta": "사용 신청하기",
     "secondary": "어떻게 쓰는지 보기",
     "meta": ["macOS 14 이상", "Apple silicon 전용", "한국어 앱"],
     "screenshotAlt": "Nokka 실시간 전사 창. 위쪽 화자 막대에 연필 표시가 붙은 '화자 1'·'박과장' 칩이 있고, 왼쪽에는 두 화자의 발언이, 오른쪽 메모 칸에는 00:01:05에 적은 '예산 확정 필요' 메모가 있습니다.",
@@ -203,6 +205,32 @@
       "macOS 14·15에서 Apple 엔진으로 녹음 후 전사하면 긴 파일은 결과가 잘릴 수 있습니다.",
       "ChatGPT 구독 로그인은 실험 기능이라 OpenAI 정책에 따라 동작하지 않을 수 있습니다. API 키 연결은 영향이 없습니다."
     ]
+  },
+  "apply": {
+    "heading": "사용 신청하기",
+    "intro": "이름과 이메일을 남겨 주세요.",
+    "noscript": "신청하려면 브라우저에서 JavaScript를 켜 주세요.",
+    "form": {
+      "nameLabel": "이름",
+      "emailLabel": "이메일",
+      "purpose": "사용 신청 접수와 안내를 위해 이름과 이메일을 받습니다.",
+      "submit": "신청하기",
+      "submitting": "신청 중…",
+      "doneHeading": "사용 신청이 접수되었습니다",
+      "doneBody": "감사합니다.",
+      "errors": {
+        "nameRequired": "이름을 입력해 주세요.",
+        "nameTooLong": "이름은 100자 이내로 입력해 주세요.",
+        "nameInvalid": "이름에 쓸 수 없는 문자가 있습니다.",
+        "emailRequired": "이메일을 입력해 주세요.",
+        "emailTooLong": "이메일은 254자 이내로 입력해 주세요.",
+        "emailInvalid": "name@example.com 형식으로 입력해 주세요.",
+        "rateLimited": "요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+        "tooLarge": "입력한 내용을 확인한 뒤 다시 제출해 주세요.",
+        "rejected": "신청을 접수하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        "unconfirmed": "접수 여부를 확인하지 못했습니다. 잠시 후 다시 제출해 주세요."
+      }
+    }
   },
   "footer": {
     "copyright": "© 2026 Nokka",

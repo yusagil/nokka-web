@@ -22,9 +22,10 @@ describe("Hero", () => {
     expect(screen.getByText(/transcribes and separates speakers on your Mac/)).toBeInTheDocument();
   });
 
-  it("links only to the how-it-works section, with no download link", () => {
+  it("links to the request form and how it works, with no download link", () => {
     render(<Hero dict={en.hero} />);
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getAllByRole("link")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Request access" })).toHaveAttribute("href", "#apply");
     expect(screen.getByRole("link", { name: /see how it works/i })).toHaveAttribute("href", "#how");
   });
 
@@ -49,6 +50,7 @@ describe("Hero", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: sameText(ko.hero.headline) })
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "사용 신청하기" })).toHaveAttribute("href", "#apply");
     expect(screen.getByRole("link", { name: /어떻게 쓰는지 보기/ })).toHaveAttribute("href", "#how");
     expect(screen.queryByText(/다운로드|DMG/)).not.toBeInTheDocument();
   });

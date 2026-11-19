@@ -40,20 +40,29 @@ export default function Navbar({ dict, locale }: NavbarProps) {
           ))}
         </ul>
 
-        <div role="group" aria-label={dict.languageLabel} className="flex items-center text-sm">
-          <span aria-current="true" className="font-medium text-fg">
-            {LOCALE_LABELS[locale]}
-          </span>
-          <span aria-hidden="true" className="px-1.5 text-fg-subtle">
-            |
-          </span>
+        <div className="flex items-center gap-5">
+          <div role="group" aria-label={dict.languageLabel} className="flex items-center text-sm">
+            <span aria-current="true" className="font-medium text-fg">
+              {LOCALE_LABELS[locale]}
+            </span>
+            <span aria-hidden="true" className="px-1.5 text-fg-subtle">
+              |
+            </span>
+            <a
+              href={`/${otherLocale}`}
+              lang={otherLocale}
+              hrefLang={otherLocale}
+              className="inline-flex min-h-11 items-center px-1 text-fg-subtle transition-colors duration-100 hover:text-fg"
+            >
+              {LOCALE_LABELS[otherLocale]}
+            </a>
+          </div>
+          {/* Desktop only: on phones the hero button is the way in. */}
           <a
-            href={`/${otherLocale}`}
-            lang={otherLocale}
-            hrefLang={otherLocale}
-            className="inline-flex min-h-11 items-center px-1 text-fg-subtle transition-colors duration-100 hover:text-fg"
+            href="#apply"
+            className="hidden h-11 items-center rounded-full bg-accent-strong px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-accent-stronger md:inline-flex"
           >
-            {LOCALE_LABELS[otherLocale]}
+            {dict.apply}
           </a>
         </div>
       </nav>

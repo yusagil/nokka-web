@@ -45,16 +45,26 @@ export default function Hero({ dict }: HeroProps) {
           {dict.subheadline}
         </p>
 
-        <a
-          href="#how"
-          className="motion-safe:animate-rise mt-8 inline-flex h-12 items-center rounded-full px-5 text-base font-medium text-fg-muted transition-colors duration-100 hover:text-fg"
+        <div
+          className="motion-safe:animate-rise mt-8 flex flex-col items-center gap-4 sm:flex-row"
           style={rise(300)}
         >
-          {dict.secondary}
-          <span aria-hidden="true" className="ml-1.5">
-            ↓
-          </span>
-        </a>
+          <a
+            href="#apply"
+            className="inline-flex h-12 items-center justify-center rounded-full bg-accent-strong px-7 text-base font-medium text-white shadow-sm transition duration-150 ease-out hover:scale-[1.02] hover:bg-accent-stronger active:scale-[0.98]"
+          >
+            {dict.cta}
+          </a>
+          <a
+            href="#how"
+            className="inline-flex h-12 items-center rounded-full px-5 text-base font-medium text-fg-muted transition-colors duration-100 hover:text-fg"
+          >
+            {dict.secondary}
+            <span aria-hidden="true" className="ml-1.5">
+              ↓
+            </span>
+          </a>
+        </div>
 
         <ul
           className="motion-safe:animate-rise mt-4 flex flex-wrap justify-center gap-x-2 text-sm text-fg-subtle"

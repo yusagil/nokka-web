@@ -22,6 +22,13 @@ describe("Navbar", () => {
     expect(within(nav).queryByRole("link", { name: /download/i })).not.toBeInTheDocument();
   });
 
+  it("has a desktop-only request access button that jumps to the form", () => {
+    render(<Navbar dict={en.nav} locale="en" />);
+    const apply = screen.getByRole("link", { name: "Request access" });
+    expect(apply).toHaveAttribute("href", "#apply");
+    expect(apply).toHaveClass("hidden", "md:inline-flex", "h-11");
+  });
+
   it("is fixed with a backdrop blur", () => {
     render(<Navbar dict={en.nav} locale="en" />);
     const header = screen.getByRole("banner");
