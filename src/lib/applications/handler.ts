@@ -1,5 +1,6 @@
 import "server-only";
 import { SITE_URL } from "@/lib/links";
+import { asObjectWithKeys, isJsonContentType, readJsonBody } from "@/lib/server/json-request";
 import {
   MAX_BODY_BYTES,
   type ApplicationErrorCode,
@@ -45,9 +46,9 @@ export function createApplicationsHandler({
       return failure(415, "UNSUPPORTED_MEDIA_TYPE");
     }
 
-    const body = await readBody(request);
-    if (body === TOO_LARGE) return failure(413, "PAYLOAD_TOO_LARGE");
-    const input = body === null ? null : parseRequest(body);
+    const body = await readJsonBody(request, MAX_BODY_BYTES);
+    if (!body.ok && body.reason === "TOO_LARGE") return failure(413, "PAYLOAD_TOO_LARGE");
+    const input = body.ok ? parseRequest(body.value) : null;
     if (!input) return failure(400, "INVALID_REQUEST");
 
     const validation = validateApplication(input);
@@ -130,58 +131,11 @@ function isAllowedOrigin(origin: string, allowed: ReadonlySet<string>, allowLoca
   }
 }
 
-function isJsonContentType(value: string | null) {
-  return value?.split(";")[0].trim().toLowerCase() === "application/json";
-}
-
-const TOO_LARGE = Symbol("too large");
-
-/** Reads at most MAX_BODY_BYTES as UTF-8. Null for undecodable bytes. */
-async function readBody(request: Request): Promise<string | null | typeof TOO_LARGE> {
-  const declared = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return TOO_LARGE;
-  if (!request.body) return "";
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
-      await reader.cancel();
-      return TOO_LARGE;
-    }
-    chunks.push(value);
-  }
-
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
 /** Accepts exactly {name: string, email: string}; anything else is a malformed request. */
-function parseRequest(body: string): ApplicationRequest | null {
-  let data: unknown;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    return null;
-  }
-  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
-
-  const keys = Object.keys(data);
-  if (keys.length !== 2 || !keys.includes("name") || !keys.includes("email")) return null;
-  const { name, email } = data as Record<string, unknown>;
+function parseRequest(data: unknown): ApplicationRequest | null {
+  const fields = asObjectWithKeys(data, ["name", "email"]);
+  if (!fields) return null;
+  const { name, email } = fields;
   if (typeof name !== "string" || typeof email !== "string") return null;
   return { name, email };
 }

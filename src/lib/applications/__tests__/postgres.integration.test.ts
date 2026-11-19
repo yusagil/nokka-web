@@ -17,6 +17,11 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 const url = process.env.APPLICATIONS_TEST_DATABASE_URL;
 const run = randomUUID().replaceAll("-", "").slice(0, 10);
 const schema = `nokka_apply_test_${run}`;
+const MIGRATIONS = [
+  "0001_access_applications.sql",
+  "0002_admin_inbox.sql",
+  "0003_application_digest.sql",
+];
 const SITE = "https://nokka-web.vercel.app";
 const email = (label: string) => `nokka-apply-qa-${run}-${label}@example.com`;
 
@@ -37,7 +42,7 @@ describe.skipIf(!url)("applications storage on Postgres", () => {
     // Stop before touching anything if the connection is not confined to the test schema.
     const [{ current }] = await sql`SELECT current_schema() AS current`;
     if (current !== schema) throw new Error(`Test connection is not isolated (schema: ${current})`);
-    expect(await applyMigrations(sql)).toEqual(["0001_access_applications.sql"]);
+    expect(await applyMigrations(sql)).toEqual(MIGRATIONS);
   });
 
   afterAll(async () => {
@@ -56,8 +61,8 @@ describe.skipIf(!url)("applications storage on Postgres", () => {
   describe("migrations", () => {
     it("records applied files and does not re-apply them", async () => {
       expect(await applyMigrations(sql)).toEqual([]);
-      const applied = await sql`SELECT name FROM schema_migrations`;
-      expect(applied.map((row) => row.name)).toEqual(["0001_access_applications.sql"]);
+      const applied = await sql`SELECT name FROM schema_migrations ORDER BY name`;
+      expect(applied.map((row) => row.name)).toEqual(MIGRATIONS);
     });
 
     it("enables row level security on both tables", async () => {

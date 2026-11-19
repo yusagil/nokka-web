@@ -24,6 +24,15 @@ function getLocale(request: NextRequest): string {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // The private admin pages are Korean-only and not localized. Access is checked on the server
+  // (layout and API), not here; this only keeps search terms and URLs out of referrers and indexes.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const response = NextResponse.next();
+    response.headers.set("Referrer-Policy", "no-referrer");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
+
   // Check if the pathname already has a locale prefix
   const pathnameHasLocale = locales.some(
     (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
