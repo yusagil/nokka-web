@@ -3,6 +3,7 @@
 // test database). Everything happens in a fresh schema that is dropped afterwards; use synthetic
 // data only and never point this at the production list.
 import { randomUUID } from "node:crypto";
+import { readdirSync } from "node:fs";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import { applyMigrations } from "../../../../scripts/db-migrate.mjs";
@@ -17,11 +18,10 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 const url = process.env.APPLICATIONS_TEST_DATABASE_URL;
 const run = randomUUID().replaceAll("-", "").slice(0, 10);
 const schema = `nokka_apply_test_${run}`;
-const MIGRATIONS = [
-  "0001_access_applications.sql",
-  "0002_admin_inbox.sql",
-  "0003_application_digest.sql",
-];
+// Every file in db/migrations, in the order the runner applies them.
+const MIGRATIONS = readdirSync(new URL("../../../../db/migrations/", import.meta.url))
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
 const SITE = "https://nokka-web.vercel.app";
 const email = (label: string) => `nokka-apply-qa-${run}-${label}@example.com`;
 

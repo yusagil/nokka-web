@@ -49,6 +49,7 @@ function isApplication(value: unknown): value is AdminApplication {
     typeof item.operatorNote === "string" &&
     (item.lastContactedAt === null || typeof item.lastContactedAt === "string") &&
     typeof item.updatedAt === "string" &&
+    typeof item.updatesApproved === "boolean" &&
     APPLICATION_STATUSES.includes(item.status as AdminApplication["status"])
   );
 }

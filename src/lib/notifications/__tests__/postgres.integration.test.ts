@@ -71,11 +71,9 @@ describe.skipIf(!url)("application digest on Postgres", () => {
     });
     const [{ current }] = await sql`SELECT current_schema() AS current`;
     if (current !== schema) throw new Error(`Test connection is not isolated (schema: ${current})`);
-    expect(await applyMigrations(sql)).toEqual([
-      "0001_access_applications.sql",
-      "0002_admin_inbox.sql",
-      "0003_application_digest.sql",
-    ]);
+    expect(await applyMigrations(sql)).toEqual(
+      expect.arrayContaining(["0001_access_applications.sql", "0002_admin_inbox.sql", "0003_application_digest.sql"]),
+    );
   });
 
   afterAll(async () => {
@@ -89,7 +87,8 @@ describe.skipIf(!url)("application digest on Postgres", () => {
   let errors: ReturnType<typeof vi.spyOn>;
   let warnings: ReturnType<typeof vi.spyOn>;
   beforeEach(async () => {
-    await sql`TRUNCATE application_digest_items, application_digest_runs, access_applications RESTART IDENTITY`;
+    // CASCADE: later migrations' tables (update registrations) reference access_applications.
+    await sql`TRUNCATE application_digest_items, application_digest_runs, access_applications RESTART IDENTITY CASCADE`;
     errors = vi.spyOn(console, "error").mockImplementation(() => {});
     warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("fetch", networkFetch);

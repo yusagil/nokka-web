@@ -16,6 +16,7 @@ const item: AdminApplication = {
   operatorNote: "",
   lastContactedAt: null,
   updatedAt: "2026-11-19T12:30:00.000Z",
+  updatesApproved: false,
 };
 
 function reply(status: number, body: unknown) {
@@ -119,6 +120,43 @@ describe("ApplicationCard", () => {
     expect(props.onSaved).toHaveBeenCalledWith(stored, false);
     const logged = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(" ");
     expect(logged).not.toMatch(/kim@example\.com|다음 주 연락/);
+  });
+
+  it("turns updates on with its own field and keeps the status and note", async () => {
+    const user = userEvent.setup();
+    const stored = { ...item, updatesApproved: true, updatedAt: "2026-11-19T14:00:00.000Z" };
+    fetchMock.mockResolvedValue(reply(200, { ok: true, item: stored }));
+    const { props } = renderCard();
+
+    const toggle = screen.getByRole("checkbox", { name: copy.updatesLabel });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(copy.updatesHint);
+    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: copy.save }));
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      updatesApproved: true,
+      expectedUpdatedAt: item.updatedAt,
+    });
+    expect(await screen.findByText(copy.saved)).toBeInTheDocument();
+    expect(props.onSaved).toHaveBeenCalledWith(stored, false);
+  });
+
+  it("warns before an approval is withdrawn and shows who is allowed", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(reply(200, { ok: true, item: { ...item, updatedAt: "2026-11-19T14:00:00.000Z" } }));
+    renderCard({ item: { ...item, updatesApproved: true } });
+
+    expect(screen.getByText(copy.updatesApprovedBadge, { selector: "span" })).toBeInTheDocument();
+    const toggle = screen.getByRole("checkbox", { name: copy.updatesLabel });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    expect(toggle).toHaveAccessibleDescription(copy.updatesRevokeWarning);
+    await user.click(screen.getByRole("button", { name: copy.save }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      updatesApproved: false,
+      expectedUpdatedAt: item.updatedAt,
+    });
   });
 
   it("keeps edits made while a save is in flight, and leaves them unsaved", async () => {
