@@ -96,14 +96,15 @@ export function createUpdateHandler(options: AdminHandlerOptions = {}) {
 
       const body = await readJsonBody(request, MAX_BODY_BYTES);
       if (!body.ok) return body.reason === "TOO_LARGE" ? failure(413, "PAYLOAD_TOO_LARGE") : failure(400, "INVALID_REQUEST");
-      const fields = asObjectWithKeys(body.value, ["status", "operatorNote", "expectedUpdatedAt"]);
+      const fields = asObjectWithKeys(body.value, ["status", "operatorNote", "updatesApproved", "expectedUpdatedAt"]);
       if (!fields) return failure(400, "INVALID_REQUEST");
-      const { status, operatorNote, expectedUpdatedAt } = fields;
+      const { status, operatorNote, updatesApproved, expectedUpdatedAt } = fields;
       if (
         (status !== undefined && typeof status !== "string") ||
         (operatorNote !== undefined && typeof operatorNote !== "string") ||
+        (updatesApproved !== undefined && typeof updatesApproved !== "boolean") ||
         typeof expectedUpdatedAt !== "string" ||
-        (status === undefined && operatorNote === undefined)
+        (status === undefined && operatorNote === undefined && updatesApproved === undefined)
       ) {
         return failure(400, "INVALID_REQUEST");
       }
@@ -122,6 +123,7 @@ export function createUpdateHandler(options: AdminHandlerOptions = {}) {
         outcome = await store.update(id, {
           status: status as ApplicationStatus | undefined,
           operatorNote: operatorNote?.trim(),
+          updatesApproved,
           expectedUpdatedAt,
         });
       } catch (error) {

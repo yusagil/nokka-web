@@ -37,6 +37,11 @@ export type AdminApplication = {
   operatorNote: string;
   lastContactedAt: string | null;
   updatedAt: string;
+  /**
+   * The operator allowed this email to register a Mac for app updates. Off by default; turning it on
+   * sends nothing, turning it off ends the registered Mac's updates and every unused code at once.
+   */
+  updatesApproved: boolean;
 };
 
 /**
@@ -53,10 +58,11 @@ export type SearchRequest = {
 /** Newest first (createdAt DESC, id DESC). */
 export type SearchResult = { ok: true; items: AdminApplication[]; nextCursor: string | null };
 
-/** PATCH body: at least one of status / operatorNote, plus the item's current updatedAt. */
+/** PATCH body: at least one of status / operatorNote / updatesApproved, plus the item's current updatedAt. */
 export type ApplicationPatch = {
   status?: ApplicationStatus;
   operatorNote?: string;
+  updatesApproved?: boolean;
   expectedUpdatedAt: string;
 };
 

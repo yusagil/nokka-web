@@ -3,6 +3,7 @@ import {
   EMAIL_MAX_LENGTH,
   NAME_MAX_LENGTH,
   type ApplicationRequest,
+  type FieldError,
   type FieldErrors,
 } from "./contracts";
 
@@ -26,12 +27,17 @@ export function validateApplication(input: ApplicationRequest): ValidationResult
   else if (name.length > NAME_MAX_LENGTH) fieldErrors.name = "TOO_LONG";
   else if (CONTROL_CHARACTERS.test(name)) fieldErrors.name = "INVALID";
 
-  if (email.length === 0) fieldErrors.email = "REQUIRED";
-  else if (email.length > EMAIL_MAX_LENGTH) fieldErrors.email = "TOO_LONG";
-  else if (CONTROL_CHARACTERS.test(email) || !EMAIL_FORMAT.test(email)) {
-    fieldErrors.email = "INVALID";
-  }
+  const emailError = validateEmail(email);
+  if (emailError) fieldErrors.email = emailError;
 
   if (fieldErrors.name || fieldErrors.email) return { ok: false, fieldErrors };
   return { ok: true, value: { name, email } };
+}
+
+/** Checks an already trimmed email against the contract; null when valid. */
+export function validateEmail(email: string): FieldError | null {
+  if (email.length === 0) return "REQUIRED";
+  if (email.length > EMAIL_MAX_LENGTH) return "TOO_LONG";
+  if (CONTROL_CHARACTERS.test(email) || !EMAIL_FORMAT.test(email)) return "INVALID";
+  return null;
 }

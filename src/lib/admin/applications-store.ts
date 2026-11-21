@@ -15,6 +15,7 @@ export type SearchParams = {
 export type UpdateParams = {
   status?: ApplicationStatus;
   operatorNote?: string;
+  updatesApproved?: boolean;
   expectedUpdatedAt: string;
 };
 
@@ -43,6 +44,7 @@ export function createAdminApplicationsStore(sql: Database): AdminApplicationsSt
     operator_note AS "operatorNote",
     to_char(last_contacted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "lastContactedAt",
     to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "updatedAt",
+    updates_approved AS "updatesApproved",
     to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorCreatedAt"
   `;
 
@@ -67,24 +69,44 @@ export function createAdminApplicationsStore(sql: Database): AdminApplicationsSt
       };
     },
 
-    async update(id, { status, operatorNote, expectedUpdatedAt }) {
-      // One atomic statement: the token comparison and the write cannot interleave with another save.
-      const [row] = await sql<Row[]>`
-        UPDATE access_applications SET
-          status = coalesce(${status ?? null}::text, status),
-          operator_note = coalesce(${operatorNote ?? null}::text, operator_note),
-          last_contacted_at = CASE
-            WHEN ${status ?? null}::text = 'contacted' AND status <> 'contacted' THEN now()
-            ELSE last_contacted_at
-          END,
-          updated_at = greatest(date_trunc('milliseconds', clock_timestamp()), updated_at + interval '1 millisecond')
-        WHERE id = ${id}::bigint AND updated_at = (${expectedUpdatedAt}::text)::timestamptz
-        RETURNING ${columns}
-      `;
-      if (row) return { kind: "updated", item: toItem(row) };
-
-      const [exists] = await sql`SELECT 1 FROM access_applications WHERE id = ${id}::bigint`;
-      return exists ? { kind: "conflict" } : { kind: "not_found" };
+    async update(id, { status, operatorNote, updatesApproved, expectedUpdatedAt }) {
+      const approved = updatesApproved ?? null;
+      return sql.begin(async (tx): Promise<UpdateOutcome> => {
+        // The token comparison and the write are one statement, so they cannot interleave with another
+        // save. It also takes the row lock that update registrations take first (then their codes), so
+        // a withdrawal and a registration in flight are applied one after the other.
+        const [row] = await tx<Row[]>`
+          UPDATE access_applications SET
+            status = coalesce(${status ?? null}::text, status),
+            operator_note = coalesce(${operatorNote ?? null}::text, operator_note),
+            last_contacted_at = CASE
+              WHEN ${status ?? null}::text = 'contacted' AND status <> 'contacted' THEN now()
+              ELSE last_contacted_at
+            END,
+            updates_approved = coalesce(${approved}::boolean, updates_approved),
+            -- A real change starts a new generation: earlier codes and sessions stop working. Saving
+            -- the same value keeps everything as it is.
+            updates_generation = CASE
+              WHEN ${approved}::boolean IS DISTINCT FROM updates_approved AND ${approved}::boolean IS NOT NULL
+                THEN updates_generation + 1
+              ELSE updates_generation
+            END,
+            active_installation_id = CASE WHEN ${approved}::boolean = false THEN NULL ELSE active_installation_id END,
+            updated_at = greatest(date_trunc('milliseconds', clock_timestamp()), updated_at + interval '1 millisecond')
+          WHERE id = ${id}::bigint AND updated_at = (${expectedUpdatedAt}::text)::timestamptz
+          RETURNING ${columns}
+        `;
+        if (!row) {
+          const [exists] = await tx`SELECT 1 FROM access_applications WHERE id = ${id}::bigint`;
+          return exists ? { kind: "conflict" } : { kind: "not_found" };
+        }
+        if (approved === false) {
+          // Withdrawn: the registered Mac (pointer cleared above), its sessions (new generation) and
+          // unused codes all end in this transaction. Turning it back on later needs a new code.
+          await tx`UPDATE update_challenges SET state = 'void' WHERE application_id = ${id}::bigint AND state = 'pending'`;
+        }
+        return { kind: "updated", item: toItem(row) };
+      });
     },
   };
 }
@@ -99,5 +121,6 @@ function toItem(row: Row): AdminApplication {
     operatorNote: row.operatorNote,
     lastContactedAt: row.lastContactedAt,
     updatedAt: row.updatedAt,
+    updatesApproved: row.updatesApproved,
   };
 }

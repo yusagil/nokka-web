@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   buildMessage,
   createGmailMailer,
+  createGmailSender,
   GMAIL_SEND_SCOPE,
   GMAIL_SEND_URL,
   GOOGLE_TOKEN_URL,
@@ -87,6 +88,18 @@ describe("Gmail mailer", () => {
     expect(init.headers).toEqual({ Authorization: "Bearer ya29.access", "Content-Type": "application/json" });
     expect(Object.keys(JSON.parse(init.body as string))).toEqual(["raw"]);
     expect(decodeRaw(init)).toBe(buildMessage(OPTIONS.from, OPTIONS.to, MAIL));
+  });
+
+  it("sends each mail of a sender to the recipient that call names, with one token request", async () => {
+    const google = fakeGoogle();
+    const { clientId, clientSecret, refreshToken, from } = OPTIONS;
+    const sender = createGmailSender({ clientId, clientSecret, refreshToken, from, fetch: google.fetch, sleep: async () => {} });
+    const access = await sender.authorize();
+    if (!access.ok) throw new Error(access.code);
+    expect(await access.send("applicant@example.com", MAIL)).toEqual({ outcome: "accepted", messageId: "18c1f0a2b3c4d5e6" });
+    expect(google.calls(GOOGLE_TOKEN_URL)).toHaveLength(1);
+    const [[, init]] = google.calls(GMAIL_SEND_URL);
+    expect(decodeRaw(init!)).toBe(buildMessage(OPTIONS.from, "applicant@example.com", MAIL));
   });
 
   it("builds a plain-text message with an encoded UTF-8 subject and body", () => {
