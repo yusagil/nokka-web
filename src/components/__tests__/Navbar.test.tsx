@@ -45,6 +45,18 @@ describe("Navbar", () => {
     expect(koLink).toHaveAttribute("lang", "ko");
   });
 
+  it("leads back to the home page sections from another page and switches language on that page", () => {
+    render(<Navbar dict={ko.nav} locale="ko" path="/updates" />);
+    const nav = screen.getByRole("navigation", { name: "주 메뉴" });
+    expect(within(nav).getByRole("link", { name: "Nokka" })).toHaveAttribute("href", "/ko");
+    expect(within(nav).getByRole("link", { name: "사용 흐름" })).toHaveAttribute("href", "/ko#how");
+    expect(within(nav).getByRole("link", { name: "데이터 경로" })).toHaveAttribute("href", "/ko#privacy");
+    expect(within(nav).getByRole("link", { name: "시작하기 전에" })).toHaveAttribute("href", "/ko#requirements");
+    expect(within(nav).getByRole("link", { name: "사용 신청하기" })).toHaveAttribute("href", "/ko#apply");
+    const group = screen.getByRole("group", { name: "언어 선택" });
+    expect(within(group).getByRole("link", { name: "EN" })).toHaveAttribute("href", "/en/updates");
+  });
+
   it("switches language from Korean to English", () => {
     render(<Navbar dict={ko.nav} locale="ko" />);
     const group = screen.getByRole("group", { name: "언어 선택" });
