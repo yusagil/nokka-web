@@ -4,10 +4,12 @@ import {
   ADMIN_REQUEST_HEADER,
   ADMIN_SEARCH_ENDPOINT,
   APPLICATION_STATUSES,
+  installLinkEndpoint,
   type AdminApplication,
   type AdminErrorCode,
   type AdminFieldErrors,
   type ApplicationPatch,
+  type InstallLink,
   type SearchRequest,
   type StatusFilter,
 } from "@/lib/admin/contracts";
@@ -30,6 +32,10 @@ export type SearchOutcome =
   | ClientFailure;
 
 export type UpdateOutcome = { ok: true; item: AdminApplication } | ClientFailure;
+
+export type IssueLinkOutcome = { ok: true; link: InstallLink } | ClientFailure;
+
+export type RevokeLinkOutcome = { ok: true; revoked: number } | ClientFailure;
 
 interface SearchParams {
   q: string;
@@ -131,6 +137,41 @@ export async function updateApplication(
   const { status: httpStatus, body } = result;
   if (httpStatus === 200 && body.ok === true && isApplication(body.item)) {
     return { ok: true, item: body.item };
+  }
+  return failure(body);
+}
+
+function isInstallLink(value: unknown): value is InstallLink {
+  if (!value || typeof value !== "object") return false;
+  const link = value as Record<string, unknown>;
+  return (
+    typeof link.url === "string" &&
+    /^https?:\/\//.test(link.url) &&
+    typeof link.expiresAt === "string" &&
+    Number.isInteger(link.build) &&
+    typeof link.version === "string"
+  );
+}
+
+/** A new private install link for an allowed request; the URL is in this answer only. */
+export async function issueInstallLink(id: AdminApplication["id"]): Promise<IssueLinkOutcome> {
+  const result = await send(installLinkEndpoint(id), { method: "POST", body: "{}" });
+  if ("ok" in result) return result;
+
+  const { status: httpStatus, body } = result;
+  if (httpStatus === 201 && body.ok === true && isInstallLink(body.link)) {
+    return { ok: true, link: body.link };
+  }
+  return failure(body);
+}
+
+export async function revokeInstallLink(id: AdminApplication["id"]): Promise<RevokeLinkOutcome> {
+  const result = await send(installLinkEndpoint(id), { method: "DELETE" });
+  if ("ok" in result) return result;
+
+  const { status: httpStatus, body } = result;
+  if (httpStatus === 200 && body.ok === true && Number.isInteger(body.revoked)) {
+    return { ok: true, revoked: body.revoked as number };
   }
   return failure(body);
 }

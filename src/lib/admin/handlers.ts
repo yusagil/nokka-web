@@ -1,6 +1,9 @@
 import "server-only";
 import { getDatabase } from "@/lib/applications/db";
 import { asObjectWithKeys, isJsonContentType, readJsonBody } from "@/lib/server/json-request";
+import { installLinkUrl } from "@/lib/update-packages/install-contracts";
+import { createInstallLinkStore, type InstallLinkStore } from "@/lib/update-packages/install-links";
+import { newAccessToken, sha256 } from "@/lib/updates/registration/crypto";
 import { getAuth } from "./better-auth";
 import { createAdminApplicationsStore, type AdminApplicationsStore, type SearchCursor } from "./applications-store";
 import {
@@ -8,12 +11,15 @@ import {
   ADMIN_PAGE_SIZE_MAX,
   ADMIN_REQUEST_HEADER,
   APPLICATION_STATUSES,
+  INSTALL_LINK_TTL_HOURS,
   SEARCH_MAX_LENGTH,
   validateOperatorNote,
   type AdminErrorCode,
   type AdminFailure,
   type AdminFieldErrors,
   type ApplicationStatus,
+  type IssueInstallLinkResult,
+  type RevokeInstallLinkResult,
   type SearchResult,
   type StatusFilter,
   type UpdateResult,
@@ -137,6 +143,84 @@ export function createUpdateHandler(options: AdminHandlerOptions = {}) {
   );
 }
 
+export type InstallLinkHandlerOptions = Pick<AdminHandlerOptions, "getAdminSession" | "getAllowedOrigin"> & {
+  /** Null when the database is not configured; the API then answers 503. */
+  getLinkStore?: () => InstallLinkStore | null;
+  /** The link's secret: 32 random bytes, base64url. */
+  newToken?: () => string;
+};
+
+/**
+ * POST /api/admin/applications/:id/install-link (body `{}`): a new private install link for an allowed
+ * request, replacing its open one. The URL (on this deployment's origin) is in this response only; its
+ * secret is in the fragment, so opening it never sends the secret in a request line.
+ * DELETE: revokes the open link.
+ */
+export function createInstallLinkHandlers(options: InstallLinkHandlerOptions = {}) {
+  const deps = {
+    ...withDefaults(options),
+    getLinkStore:
+      options.getLinkStore ??
+      (() => {
+        const sql = getDatabase();
+        return sql ? createInstallLinkStore(sql) : null;
+      }),
+    newToken: options.newToken ?? newAccessToken,
+  };
+  type Context = { params: Promise<{ id: string }> };
+
+  const POST = withErrorBoundary(async (request: Request, context: Context) => {
+    const rejected = await guard(request, deps);
+    if (rejected) return rejected;
+    const { id } = await context.params;
+    if (!isBigintId(id)) return failure(404, "NOT_FOUND");
+
+    const body = await readJsonBody(request, MAX_BODY_BYTES);
+    if (!body.ok) return body.reason === "TOO_LARGE" ? failure(413, "PAYLOAD_TOO_LARGE") : failure(400, "INVALID_REQUEST");
+    if (!asObjectWithKeys(body.value, [])) return failure(400, "INVALID_REQUEST");
+
+    const store = deps.getLinkStore();
+    const origin = deps.getAllowedOrigin();
+    if (!store || !origin) return unavailable("database or origin is not configured");
+    const token = deps.newToken();
+    let outcome;
+    try {
+      outcome = await store.issue(id, { tokenHash: sha256(token), ttlSeconds: INSTALL_LINK_TTL_HOURS * 60 * 60 });
+    } catch (error) {
+      return unavailable("install link issue failed", error);
+    }
+    if (outcome.kind === "not_found") return failure(404, "NOT_FOUND");
+    if (outcome.kind === "not_approved") return failure(409, "UPDATES_NOT_APPROVED");
+    if (outcome.kind === "no_installer") return failure(409, "NO_INSTALLER");
+    const result: IssueInstallLinkResult = {
+      ok: true,
+      link: { url: installLinkUrl(origin, token), ...outcome.link },
+    };
+    return respond(201, result);
+  });
+
+  const DELETE = withErrorBoundary(async (request: Request, context: Context) => {
+    const rejected = await guard(request, deps);
+    if (rejected) return rejected;
+    const { id } = await context.params;
+    if (!isBigintId(id)) return failure(404, "NOT_FOUND");
+
+    const store = deps.getLinkStore();
+    if (!store) return unavailable("database is not configured");
+    let outcome;
+    try {
+      outcome = await store.revoke(id);
+    } catch (error) {
+      return unavailable("install link revoke failed", error);
+    }
+    if (outcome.kind === "not_found") return failure(404, "NOT_FOUND");
+    const result: RevokeInstallLinkResult = { ok: true, revoked: outcome.revoked };
+    return respond(200, result);
+  });
+
+  return { POST, DELETE };
+}
+
 type Deps = Required<AdminHandlerOptions>;
 
 function withDefaults(options: AdminHandlerOptions): Deps {
@@ -153,7 +237,10 @@ function withDefaults(options: AdminHandlerOptions): Deps {
 }
 
 /** Session and admin id first, then the request must come from the admin page itself. */
-async function guard(request: Request, deps: Deps): Promise<Response | null> {
+async function guard(
+  request: Request,
+  deps: Pick<Deps, "getAdminSession" | "getAllowedOrigin">,
+): Promise<Response | null> {
   const session = await deps.getAdminSession(request.headers);
   if (!session.ok) return failure(session.status, session.code);
 
@@ -230,6 +317,9 @@ function failure(status: number, code: AdminErrorCode, fieldErrors?: AdminFieldE
   return respond(status, body);
 }
 
-function respond(status: number, body: SearchResult | UpdateResult | AdminFailure) {
+function respond(
+  status: number,
+  body: SearchResult | UpdateResult | IssueInstallLinkResult | RevokeInstallLinkResult | AdminFailure,
+) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }

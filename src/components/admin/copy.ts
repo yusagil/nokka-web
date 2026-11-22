@@ -63,6 +63,35 @@ export const copy = {
   reload: "최신 내용 불러오기",
   compose: "메일 작성",
   composeHint: "메일 앱에 초안을 엽니다. 직접 보낸 뒤 상태를 안내완료로 바꿔 저장하세요.",
+  installLinkLegend: "비공개 설치 링크",
+  installLinkHint: (hours: number) =>
+    `이 신청자에게만 전달할 설치 파일 링크입니다. ${hours}시간 동안 쓸 수 있고, 새로 만들면 이전 링크는 바로 막힙니다. 링크 주소는 만든 직후 이 화면에서만 볼 수 있습니다.`,
+  installLinkRevokeHint:
+    "회수하거나 새로 만들면 그 링크의 새 요청(이어 받기 포함)은 바로 거절됩니다. 이미 시작된 다운로드는 중간에 끊지 않으므로 끝까지 받을 수 있습니다.",
+  installLinkIssue: "설치 링크 만들기",
+  installLinkReissue: "새 링크 만들기",
+  installLinkIssuing: "만드는 중…",
+  installLinkRevoke: "링크 회수",
+  installLinkRevoking: "회수 중…",
+  installLinkLabel: "설치 링크",
+  installLinkSummary: (version: string, build: number, until: string) =>
+    `Nokka ${version} (${build}) 설치 파일 · ${until}까지 사용 가능. 이 화면을 벗어나면 주소를 다시 볼 수 없습니다.`,
+  installLinkCopy: "복사",
+  installLinkCopied: "링크를 복사했습니다.",
+  installLinkCopyFailed: "복사하지 못했습니다. 링크를 직접 선택해 복사하세요.",
+  installLinkCompose: "링크 메일 작성",
+  installLinkComposeHint: "메일 앱에 신청 이메일로 보낼 초안을 엽니다. 직접 확인하고 보내세요.",
+  installLinkRevoked: "링크를 회수했습니다. 새 요청은 거절되며, 이미 시작된 다운로드는 끝까지 받을 수 있습니다.",
+  installLinkNoneOpen: "열려 있는 링크가 없습니다.",
+  installLinkNotApproved: "업데이트 허용을 저장한 뒤에 만들 수 있습니다. 목록을 다시 불러와 주세요.",
+  installLinkNoInstaller: "아직 전달할 설치 파일이 지정되지 않았습니다. 릴리스 도구에서 설치 파일을 지정해야 합니다.",
+  installLinkIssueFailed: "링크를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  installLinkRevokeFailed: "링크를 회수하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  installLinkMailSubject: "Nokka 설치 링크 안내",
+  installLinkMailBody: (name: string, url: string, until: string) =>
+    `${name}님, 안녕하세요.\n\nNokka 업데이트가 승인되어 설치 파일 링크를 보내 드립니다.\n\n${url}\n\n` +
+    `이 링크는 ${until}까지 사용할 수 있습니다. 다른 사람과 공유하지 마세요.\n` +
+    "설치한 뒤 Nokka 메뉴의 ‘업데이트 확인…’에서 이 이메일 주소로 코드를 받아 이 Mac을 등록하면, 앱 안에서 다음 업데이트를 받을 수 있습니다.\n\nNokka 드림",
   mailSubject: "Nokka 사용 신청 관련 안내",
   mailBody: (name: string) =>
     `${name}님, 안녕하세요.\n\nNokka 사용을 신청해 주셔서 감사합니다.\n\n\n\nNokka 드림`,

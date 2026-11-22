@@ -26,7 +26,9 @@ export function proxy(request: NextRequest) {
 
   // The private admin pages are Korean-only and not localized. Access is checked on the server
   // (layout and API), not here; this only keeps search terms and URLs out of referrers and indexes.
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  // The private install link page is bilingual and not localized either: a redirect to a locale must
+  // not be needed for its #fragment (the link's secret) to arrive. Never indexed, never a referrer.
+  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/install") {
     const response = NextResponse.next();
     response.headers.set("Referrer-Policy", "no-referrer");
     response.headers.set("X-Robots-Tag", "noindex, nofollow");

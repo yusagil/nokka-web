@@ -13,6 +13,7 @@ import {
 import { updateApplication } from "./api";
 import { STATUS_LABEL, copy } from "./copy";
 import { composeMailto, formatDateTime } from "./format";
+import InstallLinkPanel from "./InstallLinkPanel";
 
 interface ApplicationCardProps {
   item: AdminApplication;
@@ -255,6 +256,9 @@ export default function ApplicationCard({
             {item.updatesApproved && !updatesApproved ? copy.updatesRevokeWarning : copy.updatesHint}
           </p>
         </fieldset>
+
+        {/* Only for an approval that is saved: the server checks the stored one. */}
+        {item.updatesApproved && <InstallLinkPanel item={item} />}
 
         <div>
           <label htmlFor={`${id}-note`} className="text-sm font-medium text-fg">

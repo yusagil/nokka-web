@@ -122,7 +122,7 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
     if (current !== schema) throw new Error(`Test connection is not isolated (schema: ${current})`);
     const applied = await applyMigrations(sql);
     expect(applied).toContain("0005_update_registrations.sql");
-    expect(applied.at(-1)).toBe("0006_update_packages.sql");
+    expect(applied).toContain("0006_update_packages.sql");
     folder = await mkdtemp(join(tmpdir(), "nokka-packages-"));
 
     const store = createPackageStore(sql);
@@ -281,7 +281,7 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
     expect(published.stdout).toContain("now offers build 24");
     expect((await tool("publish", "--build", "24", "--expect-current", "24")).stderr).toContain("published once");
     const status = JSON.parse((await tool("status", "--json")).stdout);
-    expect(status.channel).toEqual({ bridgeBuild: BRIDGE, currentBuild: 24, highWaterBuild: 24, nextBuildAbove: 24 });
+    expect(status.channel).toEqual({ bridgeBuild: BRIDGE, currentBuild: 24, highWaterBuild: 24, nextBuildAbove: 24, installerBuild: null });
     expect(status.packages).toEqual([
       expect.objectContaining({ build: 24, state: "published", length: LARGE, sha256: manifest.sha256, chunksLoaded: chunks }),
     ]);

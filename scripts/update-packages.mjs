@@ -8,7 +8,9 @@
 //   init --bridge-build <B>                  create the empty protected channel above bridge build B (> 22)
 //   stage --manifest <package.json> --file <Nokka.dmg>
 //                                            load the DMG in 512 KiB chunks, read it back, mark it verified;
-//                                            safe to repeat (same bytes resume, other bytes stop)
+//                                            safe to repeat (same bytes resume, other bytes stop). The bridge
+//                                            build B can be staged too: it is never published, only handed
+//                                            out by install links (installer)
 //   verify --build <N> [--file <Nokka.dmg>]  read a stored package back (and compare it with a local file)
 //   publish --build <N> --expect-current <build|none>
 //                                            offer a verified package; the channel must still be at the
@@ -16,7 +18,11 @@
 //   rollback --to <build|none> --expect-current <N>
 //                                            point the feed back to an earlier published build (or none)
 //                                            and withdraw N; fix forward with a higher build
-//   withdraw --build <N>                     stop serving a build that is not in the feed
+//   withdraw --build <N>                     stop serving a build that is not in the feed (and its install
+//                                            links; if it was the installer, new links stop until set again)
+//   installer --build <N|none>               the package new install links serve: the verified bridge build
+//                                            or a published build; none stops issuing links (links already
+//                                            issued keep their build until they expire or are revoked)
 //   discard --build <N>                      delete a package that was never published
 // The manifest comes from the app's scripts/release/make-protected-package.sh.
 // Exit status: 0 done, 1 a check failed or the database refused, 2 usage error.
@@ -106,8 +112,8 @@ const chunkCount = (length) => Math.ceil(length / CHUNK_SIZE);
 
 async function readChannel(sql, { lock = false } = {}) {
   const [row] = lock
-    ? await sql`SELECT bridge_build, current_build, high_water_build FROM update_channel WHERE id FOR UPDATE`
-    : await sql`SELECT bridge_build, current_build, high_water_build FROM update_channel WHERE id`;
+    ? await sql`SELECT bridge_build, current_build, high_water_build, installer_build FROM update_channel WHERE id FOR UPDATE`
+    : await sql`SELECT bridge_build, current_build, high_water_build, installer_build FROM update_channel WHERE id`;
   return row ?? null;
 }
 
@@ -147,7 +153,8 @@ export async function stagePackage(sql, { manifest, filePath, log = () => {} }) 
   }
   const channel = await readChannel(sql);
   if (!channel) fail("The protected channel is not initialized (init --bridge-build <B>).");
-  if (manifest.build <= floorOf(channel)) {
+  // The bridge build is never published; staged, it can only be handed out by install links.
+  if (manifest.build !== channel.bridge_build && manifest.build <= floorOf(channel)) {
     fail(`Build ${manifest.build} is not above build ${floorOf(channel)} (bridge or last published); it could never be published.`);
   }
 
@@ -298,15 +305,7 @@ export async function publishPackage(sql, build, expectCurrent) {
     if (build <= floorOf(channel)) {
       fail(`Build ${build} is not above build ${floorOf(channel)} (bridge or last published).`);
     }
-    const [shape] = await tx`
-      SELECT count(*)::int AS chunks,
-             coalesce(sum(octet_length(data)), 0)::bigint AS total,
-             count(*) FILTER (WHERE chunk_index < ${pkg.chunk_count - 1} AND octet_length(data) <> ${pkg.chunk_size})::int AS short
-      FROM update_package_chunks WHERE build = ${build}
-    `;
-    if (shape.chunks !== pkg.chunk_count || Number(shape.total) !== Number(pkg.byte_length) || shape.short) {
-      fail(`Build ${build} no longer has the chunks it was verified with.`);
-    }
+    await checkChunkShape(tx, build, pkg);
     await tx`UPDATE update_packages SET state = 'published', published_at = now() WHERE build = ${build}`;
     await tx`
       UPDATE update_channel SET current_build = ${build}, high_water_build = ${build}, updated_at = now()
@@ -318,6 +317,19 @@ export async function publishPackage(sql, build, expectCurrent) {
     `;
     return { previous: channel.current_build };
   });
+}
+
+/** Every chunk is there with its verified size (a cheap recheck before a package is offered). */
+async function checkChunkShape(tx, build, pkg) {
+  const [shape] = await tx`
+    SELECT count(*)::int AS chunks,
+           coalesce(sum(octet_length(data)), 0)::bigint AS total,
+           count(*) FILTER (WHERE chunk_index < ${pkg.chunk_count - 1} AND octet_length(data) <> ${pkg.chunk_size})::int AS short
+    FROM update_package_chunks WHERE build = ${build}
+  `;
+  if (shape.chunks !== pkg.chunk_count || Number(shape.total) !== Number(pkg.byte_length) || shape.short) {
+    fail(`Build ${build} no longer has the chunks it was verified with.`);
+  }
 }
 
 /** Points the feed back to an earlier published build (or none) and withdraws the build it showed. */
@@ -344,6 +356,7 @@ export async function rollbackChannel(sql, { to, expectCurrent }) {
       INSERT INTO update_channel_events (action, build, previous_build)
       VALUES ('rollback', ${to}, ${expectCurrent})
     `;
+    return { installerCleared: await clearInstallerIf(tx, channel, expectCurrent) };
   });
 }
 
@@ -357,20 +370,65 @@ export async function withdrawPackage(sql, build) {
     }
     const [pkg] = await tx`SELECT state FROM update_packages WHERE build = ${build} FOR UPDATE`;
     if (!pkg) fail(`There is no package for build ${build}.`);
-    if (pkg.state === "withdrawn") return { changed: false };
+    if (pkg.state === "withdrawn") return { changed: false, installerCleared: false };
     await tx`UPDATE update_packages SET state = 'withdrawn', withdrawn_at = now() WHERE build = ${build}`;
     await tx`INSERT INTO update_channel_events (action, build) VALUES ('withdraw', ${build})`;
-    return { changed: true };
+    return { changed: true, installerCleared: await clearInstallerIf(tx, channel, build) };
   });
+}
+
+/**
+ * Points new install links at `build` (null: issue none). The build must be fully stored and verified,
+ * not withdrawn, and either the bridge build or a published one. Links already issued keep the build
+ * they were issued for.
+ */
+export async function setInstaller(sql, build) {
+  if (build !== null && !isBuild(build)) fail("The build must be a build number or none.");
+  return sql.begin(async (tx) => {
+    const channel = await readChannel(tx, { lock: true });
+    if (!channel) fail("The protected channel is not initialized (init --bridge-build <B>).");
+    if (build !== null) {
+      const [pkg] = await tx`
+        SELECT byte_length, chunk_size, chunk_count, state, verified_at
+        FROM update_packages WHERE build = ${build} FOR UPDATE
+      `;
+      if (!pkg) fail(`There is no package for build ${build}; stage it first.`);
+      if (!pkg.verified_at) fail(`Build ${build} is not verified; run stage (or verify) again.`);
+      if (pkg.state === "withdrawn") fail(`Build ${build} is withdrawn and is never served again.`);
+      if (pkg.state !== "published" && build !== channel.bridge_build) {
+        fail(`Build ${build} is neither the bridge build ${channel.bridge_build} nor published; publish it first.`);
+      }
+      await checkChunkShape(tx, build, pkg);
+    }
+    if (channel.installer_build === build) return { changed: false, previous: build };
+    await tx`UPDATE update_channel SET installer_build = ${build}, updated_at = now() WHERE id`;
+    await tx`
+      INSERT INTO update_channel_events (action, build, previous_build)
+      VALUES ('installer', ${build}, ${channel.installer_build})
+    `;
+    return { changed: true, previous: channel.installer_build };
+  });
+}
+
+/** In a transaction holding the channel lock: stops new install links for a build being withdrawn. */
+async function clearInstallerIf(tx, channel, build) {
+  if (channel?.installer_build !== build) return false;
+  await tx`UPDATE update_channel SET installer_build = NULL, updated_at = now() WHERE id`;
+  await tx`INSERT INTO update_channel_events (action, build, previous_build) VALUES ('installer', NULL, ${build})`;
+  return true;
 }
 
 /** Deletes a package that was never published, so its build can be staged again. */
 export async function discardPackage(sql, build) {
   if (!isBuild(build)) fail("The build must be a positive whole number.");
   return sql.begin(async (tx) => {
+    const channel = await readChannel(tx, { lock: true });
     const [pkg] = await tx`SELECT state FROM update_packages WHERE build = ${build} FOR UPDATE`;
     if (!pkg) fail(`There is no package for build ${build}.`);
     if (pkg.state !== "staged") fail(`Build ${build} was ${pkg.state}; only a package never published can be discarded.`);
+    if (channel?.installer_build === build) fail(`Build ${build} is the installer; set another one (installer --build <N|none>) first.`);
+    const [linked] = await tx`SELECT 1 FROM update_install_links WHERE build = ${build} LIMIT 1`;
+    if (linked) fail(`Build ${build} was handed out by install links; withdraw it instead.`);
     await tx`DELETE FROM update_package_chunks WHERE build = ${build}`;
     await tx`DELETE FROM update_packages WHERE build = ${build}`;
   });
@@ -396,6 +454,8 @@ export async function channelStatus(sql) {
       highWaterBuild: channel.high_water_build,
       // What a new protected build must be above (make-protected-package.sh --after-build).
       nextBuildAbove: floorOf(channel),
+      // What new install links serve (null: none can be issued).
+      installerBuild: channel.installer_build,
     },
     packages: packages.map((p) => ({
       build: p.build,
@@ -418,6 +478,8 @@ export async function channelStatus(sql) {
     })),
   };
 }
+
+const INSTALLER_CLEARED = "It was the installer: no new install links until installer --build <N> is set again.";
 
 function isBuild(value) {
   return Number.isInteger(value) && value > 0 && value <= MAX_BUILD;
@@ -475,7 +537,7 @@ async function run(argv, sql) {
       if (!status.channel) console.log("Channel: not initialized (empty feed)");
       else {
         const c = status.channel;
-        console.log(`Channel: bridge ${c.bridgeBuild}, feed ${describe(c.currentBuild)}, highest published ${c.highWaterBuild ?? "none"}, next build above ${c.nextBuildAbove}`);
+        console.log(`Channel: bridge ${c.bridgeBuild}, feed ${describe(c.currentBuild)}, highest published ${c.highWaterBuild ?? "none"}, next build above ${c.nextBuildAbove}, install links ${describe(c.installerBuild)}`);
       }
       for (const p of status.packages) {
         console.log(`  ${p.build} ${p.version} ${p.state}${p.verifiedAt ? " verified" : ""} ${p.length} bytes ${p.chunksLoaded}/${p.chunkCount} chunks sha256 ${p.sha256}`);
@@ -520,14 +582,25 @@ async function run(argv, sql) {
       onlyOptions(options, ["to", "expect-current"]);
       const to = buildOption(options, "to", { allowNone: true });
       const current = buildOption(options, "expect-current");
-      await rollbackChannel(sql, { to, expectCurrent: current });
+      const { installerCleared } = await rollbackChannel(sql, { to, expectCurrent: current });
       console.log(`The protected feed now offers ${describe(to)}; build ${current} is withdrawn.`);
+      if (installerCleared) console.log(INSTALLER_CLEARED);
       return;
     }
     case "withdraw": {
       onlyOptions(options, ["build"]);
-      const { changed } = await withdrawPackage(sql, buildOption(options, "build"));
+      const { changed, installerCleared } = await withdrawPackage(sql, buildOption(options, "build"));
       console.log(changed ? "Withdrawn." : "Already withdrawn.");
+      if (installerCleared) console.log(INSTALLER_CLEARED);
+      return;
+    }
+    case "installer": {
+      onlyOptions(options, ["build"]);
+      const build = buildOption(options, "build", { allowNone: true });
+      const { changed, previous } = await setInstaller(sql, build);
+      if (!changed) console.log(`New install links already serve ${describe(build)}.`);
+      else if (build === null) console.log(`No new install links can be issued (was ${describe(previous)}); issued links keep their build.`);
+      else console.log(`New install links serve build ${build} (was ${describe(previous)}).`);
       return;
     }
     case "discard": {

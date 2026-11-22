@@ -82,6 +82,48 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
 - Tests: `src/lib/admin/__tests__/admin.integration.test.ts` runs with `APPLICATIONS_TEST_DATABASE_URL`, like
   the other integration tests. It covers paging, search, saves and real Better Auth session checks.
 
+## Private install links
+
+A person whose updates are allowed can get a full installer without any public download. In the admin inbox,
+an allowed request's card has `비공개 설치 링크`: `설치 링크 만들기` issues a link valid for 72 hours
+(`INSTALL_LINK_TTL_HOURS`), shows its address once, and opens a mail draft to the stored email
+(`링크 메일 작성`, sent by the operator). Nothing is mailed automatically.
+
+- Address: `https://nokka-web.vercel.app/install#<token>`. The secret is in the fragment, which browsers never send,
+  so it is never in a request path, query string or referrer: the request fields that hosting logs (Vercel Runtime
+  Logs and Log Drains) record. The `/install` page reads it, removes it from the address bar and history, and
+  sends it once in a JSON body to `POST /api/updates/v1/install/session`. It does the same when another link is
+  opened in the same tab (a fragment change, no reload): the previous download disappears first, and only the
+  answer for the link opened last is shown. An open link answers with its `ref` (a random UUID that is not
+  secret) and gets its own HttpOnly, Secure, `SameSite=Strict` cookie, `__Secure-nokka-install-<ref>`, scoped to
+  `/api/updates/v1/install/<ref>` for the link's remaining lifetime.
+- Download: the page's button is an ordinary link to that link's own `GET`/`HEAD
+  /api/updates/v1/install/<ref>/Nokka.dmg`, so the browser's own download and its resume (`Range` with `If-Range`)
+  work with that link's cookie. Links opened in several tabs never share a cookie: each tab downloads and resumes
+  exactly the link and build it shows. The address only opens with the secret of the link `ref`; the `ref` in
+  logs opens nothing. Tools can send `Authorization: Bearer <token>` instead. Answers carry
+  `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and `Content-Disposition: attachment`. A
+  missing, malformed, unknown or other link's token gets 404, and a closed link 410; both clear that link's cookie.
+  Refusals are short plain text without package bytes. The secret still travels in the mail itself, which is the
+  delivery channel.
+- Closing: one open link per request. A new link revokes the previous one, `링크 회수` (`DELETE` on the same admin
+  path) revokes it, and withdrawing the approval revokes it for good: allowing updates again needs a new link.
+  Expiry, revocation and withdrawal refuse every **new** request at once, including the session, `HEAD` and a
+  resumed range. **A response that is already sending bytes is not cut off and can finish**; the next request is
+  refused. The database keeps only the token's SHA-256, the build, the times and a download count (no addresses).
+- Installer: `node scripts/update-packages.mjs installer --build <N|none>` chooses what new links serve. It can be
+  the verified bridge build (stage it with its manifest; it is never published) or a published build. Withdrawing
+  or rolling back that build clears the choice and closes its links. `status` shows it as `install links`.
+- API: `POST`/`DELETE /api/admin/applications/:id/install-link`, with the same admin checks as the inbox API.
+  `POST` answers 409 `UPDATES_NOT_APPROVED` or `NO_INSTALLER` when no link can be issued.
+- Code: `src/lib/update-packages/install-{contracts,handlers,links}.ts`, `src/app/install`,
+  `src/components/install/InstallLinkPage.tsx`, `src/components/admin/InstallLinkPanel.tsx`, migration 0007.
+  `install-links.integration.test.ts` runs on Postgres with `APPLICATIONS_TEST_DATABASE_URL`. It covers issuing,
+  downloads over local HTTP, two links open in one browser, replacement, revocation (including a download already
+  under way), expiry, approval and package withdrawal, and checks that no request line carried a secret.
+- Before release, check on an isolated Preview with a synthetic link: open it, download in full and resumed, and
+  confirm that neither the Runtime Logs nor an active Log Drain contain the token.
+
 ## Daily digest
 
 Vercel Cron calls `GET /api/cron/application-digest` once a day (`vercel.json`: `0 0 * * *` UTC, 09:00 KST).

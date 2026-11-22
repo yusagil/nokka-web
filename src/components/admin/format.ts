@@ -21,9 +21,16 @@ export function formatDateTime(iso: string): string {
  * Opening it sends nothing and changes nothing; the operator sends the mail and records it.
  */
 export function composeMailto(name: string, email: string): string {
+  return mailto(email, copy.mailSubject, copy.mailBody(name));
+}
+
+/** The same kind of draft, carrying a private install link and its expiry (Seoul time). */
+export function composeInstallLinkMailto(name: string, email: string, url: string, expiresAt: string): string {
+  return mailto(email, copy.installLinkMailSubject, copy.installLinkMailBody(name, url, formatDateTime(expiresAt)));
+}
+
+function mailto(email: string, subject: string, body: string): string {
   // Keep "@" readable for mail apps but encode anything that would break the URL (?, &, #, %).
   const to = encodeURIComponent(email).replace(/%40/g, "@");
-  const subject = encodeURIComponent(copy.mailSubject);
-  const body = encodeURIComponent(copy.mailBody(name));
-  return `mailto:${to}?subject=${subject}&body=${body}`;
+  return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
