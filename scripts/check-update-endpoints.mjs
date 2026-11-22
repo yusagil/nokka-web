@@ -104,14 +104,37 @@ export async function checkEndpoints({ origin, token = null, expect = token ? "a
     target ??= 2147483647;
 
     const pkgHead = await request(packagePath(target), { method: "HEAD", auth: token });
-    const size = Number(pkgHead.headers.get("content-length"));
     const etag = pkgHead.headers.get("etag");
-    record(pkgHead.status === 200 && pkgHead.headers.get("accept-ranges") === "bytes" && size > 0 && Boolean(etag),
-      `active HEAD package ${target} → 200, Accept-Ranges bytes, length, ETag`, `status ${pkgHead.status}`);
+    const headOK = pkgHead.status === 200 && pkgHead.headers.get("accept-ranges") === "bytes" && Boolean(etag);
+    record(headOK, `active HEAD package ${target} → 200, Accept-Ranges bytes, ETag`, `status ${pkgHead.status}`);
     checkPrivate(`active HEAD package ${target}`, pkgHead);
-    if (manifest) record(size === manifest.length, `HEAD length is the manifest length ${manifest.length}`, `got ${size}`);
+    const headLength = pkgHead.headers.get("content-length");
+    let size = headLength !== null && /^[1-9]\d*$/.test(headLength) ? Number(headLength) : NaN;
+    if (headLength === null && headOK) {
+      // Next.js 16.4.5 and later drop Content-Length from route handler responses, HEAD included: take
+      // the size from the Content-Range of a one-byte range of the same ETag instead.
+      const probe = await request(packagePath(target), { auth: token, headers: { Range: "bytes=0-0", "If-Range": etag } });
+      const contentRange = /^bytes 0-0\/([1-9]\d*)$/.exec(probe.headers.get("content-range") ?? "");
+      const rangeSize = Number(contentRange?.[1]);
+      const probeHeadersOK = probe.status === 206 && Number.isSafeInteger(rangeSize) &&
+        probe.headers.get("etag") === etag && !probe.headers.has("content-encoding");
+      if (probeHeadersOK) {
+        let bytesRead = 0;
+        for await (const chunk of probe.body ?? []) {
+          bytesRead += chunk.byteLength;
+          if (bytesRead > 1) break;
+        }
+        if (bytesRead === 1) size = rangeSize;
+      } else {
+        await probe.body?.cancel();
+      }
+      checkPrivate(`active size probe package ${target}`, probe);
+    }
+    const sizeOK = Number.isSafeInteger(size) && size > 0;
+    record(sizeOK, `active package ${target} length from HEAD or a one-byte range`, sizeOK ? `${size} bytes` : "missing or invalid length");
+    if (manifest) record(size === manifest.length, `package length is the manifest length ${manifest.length}`, `got ${size}`);
 
-    if (pkgHead.status === 200 && size > 0) {
+    if (headOK && sizeOK) {
       const ranges = [
         [`0-1023`, 0, Math.min(1023, size - 1)],
         [`-1`, size - 1, size - 1],

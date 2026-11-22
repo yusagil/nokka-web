@@ -48,6 +48,8 @@ const BRIDGE = 23;
 const LARGE = 31_783_744 + 777;
 const TOOL = join(process.cwd(), "scripts/update-packages.mjs");
 const CHECKER = join(process.cwd(), "scripts/check-update-endpoints.mjs");
+// Next.js 16.4.5 and later drop these from route handler responses before sending them (Node runtime).
+const FRAMING_HEADERS = ["content-length", "content-encoding", "transfer-encoding"];
 
 type Manifest = {
   format: string;
@@ -67,6 +69,8 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
   let folder: string;
   let server: Server;
   let origin: string;
+  // While true, the local server sends responses the way Next.js 16.4.5+ does: without framing headers.
+  let dropFraming = false;
   const reads = { count: 0, bytes: 0, largest: 0 };
 
   const writePackage = async (name: string, size: number) => {
@@ -159,7 +163,8 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
           : match
             ? await packages[method](request, { params: Promise.resolve({ build: match[1] }) })
             : new Response("not found", { status: 404 });
-      res.writeHead(response.status, Object.fromEntries(response.headers));
+      const sent = [...response.headers].filter(([name]) => !(dropFraming && FRAMING_HEADERS.includes(name)));
+      res.writeHead(response.status, Object.fromEntries(sent));
       if (!response.body) return void res.end();
       await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream), res).catch(() => {});
     });
@@ -339,6 +344,36 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
     expect(revoked.failures).toEqual([]);
     const anonymous = await checks({ build: 24 });
     expect(anonymous.failures).toEqual([]);
+  });
+
+  it("checks the package size with a one-byte range when the server sends no Content-Length", async () => {
+    const seeded = await seedRegisteredSession(sql, { email: `nokka-packages-qa-${id}-framing@example.com` });
+    const manifest = JSON.parse(
+      JSON.stringify((await channelStatus(sql)).packages.find((p: { build: number }) => p.build === 24)),
+    );
+    const [row] = await sql`SELECT ed_signature, target_cdhash FROM update_packages WHERE build = 24`;
+    const expected = { build: 24, length: manifest.length, sha256: manifest.sha256, edSignature: row.ed_signature, targetCDHash: row.target_cdhash };
+    dropFraming = true;
+    try {
+      const head = await fetch(`${origin}/api/updates/v1/packages/24/Nokka.dmg`, {
+        method: "HEAD",
+        headers: { Authorization: `Bearer ${seeded.accessToken}` },
+      });
+      expect(head.status).toBe(200);
+      expect(head.headers.get("content-length")).toBeNull();
+
+      const result = await checks({ token: seeded.accessToken, manifest: expected });
+      expect(result.failures).toEqual([]);
+      expect(result.lines).toContain(`PASS active package 24 length from HEAD or a one-byte range — ${LARGE} bytes`);
+      expect(result.lines).toContain("PASS active size probe package 24: private, no-store, Vary Authorization");
+      expect(result.lines).toContain(`PASS package length is the manifest length ${LARGE} — got ${LARGE}`);
+    } finally {
+      dropFraming = false;
+    }
+    // With Content-Length the size comes from HEAD and no probe is sent.
+    const withLength = await checks({ token: seeded.accessToken, manifest: expected });
+    expect(withLength.failures).toEqual([]);
+    expect(withLength.lines.some((line) => line.includes("size probe"))).toBe(false);
   });
 
   it("serves only published builds and moves the pointer forwards, or back with the bad build withdrawn", async () => {
