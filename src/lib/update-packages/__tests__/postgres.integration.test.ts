@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
+import { createBrotliCompress, constants as zlib } from "node:zlib";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { applyMigrations } from "../../../../scripts/db-migrate.mjs";
@@ -71,6 +72,10 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
   let origin: string;
   // While true, the local server sends responses the way Next.js 16.4.5+ does: without framing headers.
   let dropFraming = false;
+  // While set, the local server stands in for a CDN that compresses the whole package for clients that
+  // accept br: as Vercel does for application/octet-stream ("vercel"), whatever its type ("all"), or
+  // whatever its type but only when the bytes are sent, not for HEAD ("get").
+  let cdn: "none" | "vercel" | "all" | "get" = "none";
   const reads = { count: 0, bytes: 0, largest: 0 };
 
   const writePackage = async (name: string, size: number) => {
@@ -163,10 +168,22 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
           : match
             ? await packages[method](request, { params: Promise.resolve({ build: match[1] }) })
             : new Response("not found", { status: 404 });
-      const sent = [...response.headers].filter(([name]) => !(dropFraming && FRAMING_HEADERS.includes(name)));
+      const compress =
+        cdn !== "none" && match !== null && response.status === 200 && /\bbr\b/.test(req.headers["accept-encoding"] ?? "") &&
+        (cdn === "all" || (cdn === "get" ? method === "GET" : response.headers.get("content-type") === "application/octet-stream"));
+      let sent = [...response.headers].filter(([name]) => !(dropFraming && FRAMING_HEADERS.includes(name)));
+      if (compress) {
+        // What Vercel sent on a Preview: Content-Encoding br, a weak ETag, no Content-Length or Accept-Ranges.
+        sent = sent
+          .filter(([name]) => name !== "content-length" && name !== "accept-ranges")
+          .map(([name, value]) => [name, name === "etag" ? `W/${value}` : value]);
+        sent.push(["content-encoding", "br"]);
+      }
       res.writeHead(response.status, Object.fromEntries(sent));
       if (!response.body) return void res.end();
-      await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream), res).catch(() => {});
+      const body = Readable.fromWeb(response.body as import("node:stream/web").ReadableStream);
+      const brotli = () => createBrotliCompress({ params: { [zlib.BROTLI_PARAM_QUALITY]: 1 } });
+      await (compress ? pipeline(body, brotli(), res) : pipeline(body, res)).catch(() => {});
     });
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
@@ -374,6 +391,39 @@ describe.skipIf(!url)("protected update packages on Postgres", () => {
     const withLength = await checks({ token: seeded.accessToken, manifest: expected });
     expect(withLength.failures).toEqual([]);
     expect(withLength.lines.some((line) => line.includes("size probe"))).toBe(false);
+  });
+
+  it("serves the package in a type the CDN leaves as it is, and fails the checks for what it compresses", async () => {
+    const seeded = await seedRegisteredSession(sql, { email: `nokka-packages-qa-${id}-compressed@example.com` });
+    const head = "active HEAD package 24 accepting br → not compressed, same strong ETag, Accept-Ranges bytes";
+    const download = "active full download 1/1 accepting br → not compressed, same strong ETag, Accept-Ranges bytes";
+    const compressed = "status 200, Content-Encoding br, ETag different, Accept-Ranges none";
+    try {
+      cdn = "vercel";
+      const passed = await checks({ token: seeded.accessToken });
+      expect(passed.failures).toEqual([]);
+      expect(passed.lines).toEqual(expect.arrayContaining([`PASS ${head}`, `PASS ${download}`]));
+      cdn = "all";
+      expect((await checks({ token: seeded.accessToken })).failures).toEqual([
+        `FAIL ${head} — ${compressed}`,
+        `FAIL ${download} — ${compressed}`,
+      ]);
+      // Only the bytes compressed: the HEAD can not show it, the full download (decoded, so its length
+      // still matches) does.
+      cdn = "get";
+      const onlyGet = await checks({ token: seeded.accessToken });
+      expect(onlyGet.failures).toEqual([`FAIL ${download} — ${compressed}`]);
+      expect(onlyGet.lines).toContain(`PASS ${head}`);
+      // Without Content-Length (Next.js 16.4.5+) the size still comes from a one-byte range.
+      dropFraming = true;
+      const unframed = await checks({ token: seeded.accessToken });
+      expect(unframed.failures).toEqual([`FAIL ${download} — ${compressed}`]);
+      expect(unframed.lines).toContain(`PASS active package 24 length from HEAD or a one-byte range — ${LARGE} bytes`);
+      expect(unframed.lines).toContain("PASS active size probe package 24: private, no-store, Vary Authorization");
+    } finally {
+      cdn = "none";
+      dropFraming = false;
+    }
   });
 
   it("serves only published builds and moves the pointer forwards, or back with the bad build withdrawn", async () => {

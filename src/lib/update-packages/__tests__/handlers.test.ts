@@ -225,7 +225,7 @@ describe("protected package", () => {
     const { store, calls, info } = memoryStore(bytes);
     const response = await call(createPackageHandlers({ authorize, getStore: () => store }).GET, { token: ACTIVE });
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("application/octet-stream");
+    expect(response.headers.get("content-type")).toBe("application/x-apple-diskimage");
     expect(response.headers.get("content-length")).toBe(String(size));
     expect(response.headers.get("accept-ranges")).toBe("bytes");
     expect(response.headers.get("etag")).toBe(`"${info.sha256Hex}"`);
@@ -253,6 +253,7 @@ describe("protected package", () => {
     ] as const) {
       const response = await call(GET, { token: ACTIVE, headers: { range: header } });
       expect(response.status, header).toBe(206);
+      expect(response.headers.get("content-type")).toBe("application/x-apple-diskimage");
       expect(response.headers.get("content-range")).toBe(`bytes ${start}-${end}/${size}`);
       expect(response.headers.get("content-length")).toBe(String(end - start + 1));
       expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes.slice(start, end + 1));
@@ -274,6 +275,7 @@ describe("protected package", () => {
     const head = await call(HEAD, { token: ACTIVE, method: "HEAD", headers: { range: "bytes=0-9" } });
     expect(head.status).toBe(200);
     expect(head.body).toBeNull();
+    expect(head.headers.get("content-type")).toBe("application/x-apple-diskimage");
     expect(head.headers.get("content-length")).toBe(String(size));
     expect(calls.some((c) => c.startsWith("chunk"))).toBe(false);
 

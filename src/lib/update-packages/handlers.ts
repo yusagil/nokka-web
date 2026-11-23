@@ -43,6 +43,11 @@ const PRIVATE_HEADERS = {
   Vary: "Authorization",
   "X-Content-Type-Options": "nosniff",
 } as const;
+// The disk image's own type. Vercel's CDN compresses application/octet-stream for clients that accept br
+// (browsers, and URLSession over HTTPS), dropping Content-Length and Accept-Ranges and weakening the ETag,
+// so a download shows no size and can not resume; it leaves this type as it is. Cache-Control:
+// no-transform does not stop it.
+const PACKAGE_CONTENT_TYPE = "application/x-apple-diskimage";
 
 /** GET and HEAD /api/updates/v1/appcast.xml */
 export function createAppcastHandlers(options: PackageHandlerOptions = {}) {
@@ -113,7 +118,7 @@ export function createPackageHandlers(options: PackageHandlerOptions = {}) {
       const range = requested.kind === "partial" ? requested.range : { start: 0, end: size - 1 };
       const headers: Record<string, string> = {
         ...common,
-        "Content-Type": "application/octet-stream",
+        "Content-Type": PACKAGE_CONTENT_TYPE,
         "Content-Length": String(range.end - range.start + 1),
       };
       if (requested.kind === "partial") headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
