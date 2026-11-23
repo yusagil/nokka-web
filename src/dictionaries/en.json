@@ -278,6 +278,7 @@
       "items": [
         "One email registers one Mac.",
         "In the reinstalled app or on the new Mac, get a new code and register again with the steps above. A code that was used can't be used again.",
+        "The exception is when a registered Nokka quit to install an update and the installation didn't finish. Installing that update yourself in the old app's location on this Mac, before you open the old app again, can keep the registration. If ‘업데이트 확인…’ (Check for Updates) then shows the registration screen, get a new code and register with the steps above.",
         "Your earlier registration stays until the new one is done. After that, the earlier Mac or the earlier installation no longer receives updates.",
         "An app whose registration ended keeps working on the version it has."
       ]
@@ -287,7 +288,7 @@
       "body": [
         "For example, no update is offered to install, the update failed, or you need to install Nokka fresh. If you still have the app, keep using it and don't delete it.",
         "There is no public installer. Users whose updates are approved receive a private installer link, valid for a limited time, separately. This page has no installer or installer link.",
-        "Use the link you receive before it expires, and don't share it. After installing, register this Mac with the steps above to get later updates in the app."
+        "Use the link you receive before it expires, and don't share it. After installing, if ‘업데이트 확인…’ (Check for Updates) shows the registration screen, register this Mac with the steps above to get later updates in the app."
       ]
     },
     "apply": {

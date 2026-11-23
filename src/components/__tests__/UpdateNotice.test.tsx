@@ -55,6 +55,20 @@ describe("UpdateNotice", () => {
     expect(within(region).getByText(/이전 등록은 새 등록을 마칠 때까지 그대로입니다/)).toBeInTheDocument();
   });
 
+  it("keeps the registration for the same update installed by hand after it failed, before the old app opens", () => {
+    render(<UpdateNotice dict={ko.updates} locale="ko" />);
+    const region = screen.getByRole("region", { name: "다시 설치했거나 Mac을 바꿨다면" });
+    const items = within(region).getAllByRole("listitem");
+    expect(items[2]).toHaveTextContent("등록한 Nokka가 업데이트를 설치하려고 종료됐는데 설치가 끝나지 않은 경우는 예외입니다.");
+    expect(items[2]).toHaveTextContent(
+      "이전 앱을 다시 열기 전에 그 업데이트를 이 Mac에서 이전 앱과 같은 위치에 직접 설치하면 등록이 이어질 수 있습니다."
+    );
+    expect(items[2]).toHaveTextContent("설치한 뒤 ‘업데이트 확인…’에서 등록 화면이 열리면 새 코드를 받아");
+    expect(en.updates.change.items[2]).toMatch(
+      /registered Nokka quit to install an update and the installation didn't finish\. Installing that update yourself in the old app's location on this Mac, before you open the old app again, can keep the registration\./
+    );
+  });
+
   it("links only to the access request, never to a file or a download", () => {
     render(<UpdateNotice dict={ko.updates} locale="ko" />);
     const links = screen.getAllByRole("link");
@@ -73,7 +87,10 @@ describe("UpdateNotice", () => {
     );
     expect(region).toHaveTextContent("이 페이지에는 설치 파일이나 설치 링크가 없습니다.");
     expect(region).toHaveTextContent("받은 링크는 유효 기간 안에 쓰고, 다른 사람과 공유하지 마세요.");
-    expect(region).toHaveTextContent("설치한 뒤에는 위 순서대로 이 Mac을 등록해야");
+    // Registering after the install is asked only when the app asks for it: the same update put back after a failed
+    // install can keep the registration (see the exception above).
+    expect(region).toHaveTextContent("설치한 뒤 ‘업데이트 확인…’에서 등록 화면이 열리면 위 순서대로 이 Mac을 등록하세요.");
+    expect(en.updates.installer.body[2]).toMatch(/After installing, if ‘업데이트 확인…’ \(Check for Updates\) shows the registration screen, register/);
     expect(within(region).queryByRole("link")).toBeNull();
     expect(en.updates.installer.body[1]).toMatch(/private installer link, valid for a limited time, separately/);
   });
@@ -119,6 +136,8 @@ describe("UpdateNotice", () => {
       "이 Mac에 등록됨",
       "업데이트 확인…",
       "새 코드 받기",
+      "업데이트 확인…",
+      "업데이트 확인…",
     ]);
     for (const element of marked) {
       expect(element.previousSibling?.textContent?.endsWith("‘")).toBe(true);
