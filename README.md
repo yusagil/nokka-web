@@ -103,7 +103,11 @@ an allowed request's card has `비공개 설치 링크`: `설치 링크 만들�
   marker, or a browser that once lost a handed-over token, checks links in place instead, and that entry keeps
   the address. A failure can be retried with the token in memory. A reload (or back and forward) shows the last
   final answer again from the entry's own history state (`ref`, build and expiry, nothing secret), so a tab opened
-  from this one, which copies its `sessionStorage` but not its entries, never shows it; a reload while a link is
+  from this one, which copies its `sessionStorage` but not its entries, never shows it. A download shown again (also
+  from the back-forward cache) keeps its button only once a `HEAD` of its address still answers 200 with this
+  browser's cookie (no button while it is asked): 410 (revoked, replaced or expired since) or 404 (the cookie is
+  gone) shows it as closed from then on, past its expiry it is closed without asking, and an unreachable address
+  leaves it as it was. A reload while a link is
   checked asks for the link again. A link opens once: the page keeps what a link opened in `localStorage` under its
   own key, the SHA-256 of its token (never the token), and the same link opened again in this browser shows its
   download while a `HEAD` of its download address still answers 200 with its cookie (404: used, the cookie is not

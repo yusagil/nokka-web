@@ -360,7 +360,6 @@ describe("InstallLinkPage", () => {
 
   describe("a reload", () => {
     it.each([
-      ["the download", reply(200, READY), () => screen.findByRole("link", { name: DOWNLOAD })],
       ["a refusal", reply(410, { ok: false, code: "GONE" }), () => screen.findByText(CLOSED)],
       ["a used link", reply(410, USED_ANSWER), () => screen.findByText(USED)],
     ])("shows %s again without asking", async (_, answer, find) => {
@@ -371,6 +370,54 @@ describe("InstallLinkPage", () => {
       expect(await find()).toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(replaceEntry).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers the download again only once its address still opens with this browser's cookie", async () => {
+      let opens!: (value: unknown) => void;
+      fetchMock.mockResolvedValueOnce(reply(200, READY)).mockReturnValueOnce(new Promise((resolve) => (opens = resolve)));
+      await openAndArrive(`/install#${TOKEN}`);
+      await screen.findByRole("link", { name: DOWNLOAD });
+      reload();
+      // No button while its address is asked.
+      expect(await screen.findByText("링크를 확인하는 중…")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: DOWNLOAD })).not.toBeInTheDocument();
+      const [url, init] = fetchMock.mock.calls[1];
+      expect(url).toBe(`/api/updates/v1/install/${REF}/Nokka.dmg`);
+      expect(init).toMatchObject({ method: "HEAD", credentials: "same-origin", cache: "no-store", referrerPolicy: "no-referrer" });
+      await act(async () => opens(reply(200)));
+      expect(await screen.findByRole("link", { name: DOWNLOAD })).toHaveAttribute("href", `/api/updates/v1/install/${REF}/Nokka.dmg`);
+      // The link itself is never sent again.
+      expect(fetchMock.mock.calls.map(([, init]) => init.method)).toEqual(["POST", "HEAD"]);
+      expect(replaceEntry).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      [410, "revoked, replaced or expired since"],
+      [404, "without its cookie in this browser any more"],
+    ])("says a download can not be used when its address answers %i (%s), and keeps saying so", async (status) => {
+      fetchMock.mockResolvedValueOnce(reply(200, READY)).mockResolvedValueOnce(reply(status));
+      await openAndArrive(`/install#${TOKEN}`);
+      await screen.findByRole("link", { name: DOWNLOAD });
+      reload();
+      expect(await screen.findByText(CLOSED)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: DOWNLOAD })).not.toBeInTheDocument();
+      expect(window.history.state).toMatchObject({ nokkaInstall: { kind: "closed" } });
+
+      // Kept in the entry: the next reload says so without asking again.
+      reload();
+      expect(await screen.findByText(CLOSED)).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps the download it showed when its address can not be reached", async () => {
+      fetchMock.mockResolvedValueOnce(reply(200, READY)).mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(reply(503));
+      await openAndArrive(`/install#${TOKEN}`);
+      await screen.findByRole("link", { name: DOWNLOAD });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        reload();
+        expect(await screen.findByRole("link", { name: DOWNLOAD })).toHaveAttribute("href", `/api/updates/v1/install/${REF}/Nokka.dmg`);
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
     it("never offers an earlier link's download while a newer one could not be checked", async () => {
@@ -435,6 +482,52 @@ describe("InstallLinkPage", () => {
       expect(await screen.findByText(MISSING)).toBeInTheDocument();
       expect(screen.queryByRole("link")).not.toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("a page shown again from the back-forward cache", () => {
+    const shownAgain = (persisted: boolean) =>
+      act(() => {
+        window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted }));
+      });
+
+    it.each([
+      [410, () => screen.findByText(CLOSED)],
+      [200, () => screen.findByRole("link", { name: DOWNLOAD })],
+    ])("offers no button until the download's address answers (%i)", async (status, find) => {
+      let answers!: (value: unknown) => void;
+      fetchMock.mockResolvedValueOnce(reply(200, READY)).mockReturnValueOnce(new Promise((resolve) => (answers = resolve)));
+      await openAndArrive(`/install#${TOKEN}`);
+      await screen.findByRole("link", { name: DOWNLOAD });
+      shownAgain(true);
+      expect(await screen.findByText("링크를 확인하는 중…")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: DOWNLOAD })).not.toBeInTheDocument();
+      expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "HEAD" });
+      await act(async () => answers(reply(status)));
+      expect(await find()).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("says a download that expired while the page was away can not be used, without asking", async () => {
+      fetchMock.mockResolvedValueOnce(reply(200, READY));
+      await openAndArrive(`/install#${TOKEN}`);
+      await screen.findByRole("link", { name: DOWNLOAD });
+      vi.setSystemTime(new Date("2026-11-26T03:30:00.250Z"));
+      shownAgain(true);
+      expect(await screen.findByText(CLOSED)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: DOWNLOAD })).not.toBeInTheDocument();
+      expect(window.history.state).toMatchObject({ nokkaInstall: { kind: "closed" } });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("asks nothing when the page is shown for the first time", async () => {
+      fetchMock.mockResolvedValueOnce(reply(200, READY));
+      await openAndArrive(`/install#${TOKEN}`);
+      await screen.findByRole("link", { name: DOWNLOAD });
+      shownAgain(false);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("link", { name: DOWNLOAD })).toBeInTheDocument();
     });
   });
 
@@ -535,7 +628,7 @@ describe("InstallLinkPage", () => {
 
   describe("the same link opened at once in two tabs", () => {
     it("turns the tab told it was used into the download as soon as the other tab keeps it", async () => {
-      fetchMock.mockResolvedValueOnce(reply(410, USED_ANSWER)).mockResolvedValueOnce(reply(200));
+      fetchMock.mockResolvedValueOnce(reply(410, USED_ANSWER)).mockResolvedValueOnce(reply(200)).mockResolvedValueOnce(reply(200));
       await openAndArrive(`/install#${TOKEN}`);
       expect(await screen.findByText(USED)).toBeInTheDocument();
 

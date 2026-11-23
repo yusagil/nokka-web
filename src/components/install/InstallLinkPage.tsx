@@ -218,6 +218,16 @@ async function openedBefore(key: string): Promise<State | null> {
 }
 
 /**
+ * A download shown again (reload, back or forward): its own address with this browser's cookie says whether
+ * it still opens. Closed since (410), or the cookie is gone (404, also once a 410 cleared it): no button.
+ * Unreachable: what was shown stays, and the download itself says if it is refused.
+ */
+async function stillOpen(link: Link): Promise<State> {
+  const found = await probe(link);
+  return found === "closed" || found === "absent" ? { kind: "closed" } : { kind: "ready", link };
+}
+
+/**
  * A link's answer. A link opens once: one this browser opened before shows its download without asking
  * again. A used link may still be this browser's: another tab opened it while this one asked, or the first
  * answer was cut short after its cookie arrived; the refusal's link (when the server tells) is then tried.
@@ -319,7 +329,8 @@ function takeHandedOver(): string | null {
  * have it. So the tab's history holds no entry opened with a link, whatever the answer and however many
  * links are opened one after another. The page loaded in its place checks the link once (a link opens
  * once). A failure can be retried with the token in memory. A reload, back or forward shows the entry's last
- * final answer again; while a link is checked it asks for the link again. A used link turns into its
+ * final answer again, a download only once its address still opens with this browser's cookie; while a link
+ * is checked it asks for the link again. A used link turns into its
  * download as soon as another tab of this browser keeps it. The download is an ordinary link to that link's
  * own address, so the browser's own download (and its resume) works with that link's cookie.
  */
@@ -333,10 +344,11 @@ export default function InstallLinkPage() {
 
   useEffect(() => {
     /**
-     * Checks a link in this document; only the answer for the link opened last is shown and kept. A used
-     * link shown again is looked up once more: another tab may have kept its download since.
+     * Checks a link in this document; only the answer for the link opened last is shown and kept. An answer
+     * `shown` again is checked once more: a download may have been closed since, and another tab may have
+     * kept a used link's download.
      */
-    const run = (found: string | null, first: State) => {
+    const run = (found: string | null, first: State, shown: Shown | null = null) => {
       token.current = found;
       const request = ++latest.current;
       const show = (next: State) => {
@@ -346,8 +358,9 @@ export default function InstallLinkPage() {
       };
       void Promise.resolve(first).then(show);
       if (found) void check(found).then(show);
-      else if (first.kind === "used" && first.key) {
-        void openedBefore(first.key).then((next) => {
+      else if (shown?.kind === "ready") void stillOpen(shown.link).then(show);
+      else if (shown?.kind === "used" && shown.key) {
+        void openedBefore(shown.key).then((next) => {
           if (next?.kind === "ready") show(next);
         });
       }
@@ -360,7 +373,13 @@ export default function InstallLinkPage() {
       if (!first && !hash) return;
       if (!hash) {
         const handed = takeHandedOver();
-        run(handed, handed ? { kind: "checking" } : (recall() ?? { kind: "missing" }));
+        if (handed) {
+          run(handed, { kind: "checking" });
+          return;
+        }
+        // Shown again: a download's button waits until its address answers.
+        const shown = recall();
+        run(null, shown?.kind === "ready" ? { kind: "checking" } : (shown ?? { kind: "missing" }), shown);
         return;
       }
       const address = pathname + search;
@@ -389,9 +408,18 @@ export default function InstallLinkPage() {
     else start();
     const onHashChange = () => consume(false);
     window.addEventListener("hashchange", onHashChange);
+    // Shown again from the back-forward cache, where no effect runs: what it shows is checked as on a reload
+    // (expired since: closed; a download: no button until its address answers).
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      const shown = recall();
+      if (shown) run(null, shown.kind === "ready" ? { kind: "checking" } : shown, shown);
+    };
+    window.addEventListener("pageshow", onPageShow);
     return () => {
       document.removeEventListener("prerenderingchange", start);
       window.removeEventListener("hashchange", onHashChange);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, []);
 
