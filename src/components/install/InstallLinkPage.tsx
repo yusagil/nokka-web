@@ -8,15 +8,40 @@ import {
   installDownloadPath,
   type InstallSessionResult,
 } from "@/lib/update-packages/install-contracts";
+import { replaceEntry } from "./entry";
+
+/** What a link opens: the session answer without `ok`. */
+type Link = Omit<InstallSessionResult, "ok">;
 
 type State =
   | { kind: "checking" }
-  /** No usable token in the fragment (or the page was reloaded after reading it). */
+  /** No usable token in the fragment, and nothing to show again in this entry. */
   | { kind: "missing" }
   /** Unknown, expired, revoked or replaced. */
   | { kind: "closed" }
+  /**
+   * Opened before (a link opens once), and this browser can not show its download (yet). `key` names the
+   * link here, so its download shows as soon as another tab of this browser keeps it.
+   */
+  | { kind: "used"; key?: string }
   | { kind: "error" }
-  | { kind: "ready"; link: InstallSessionResult };
+  | { kind: "ready"; link: Link };
+
+/** A final answer, kept in the entry's own history state for a reload, back or forward. Nothing secret. */
+type Shown = Extract<State, { kind: "closed" | "used" | "ready" }>;
+const SHOWN_STATE = "nokkaInstall";
+// A link opens once: its first answer sets the download cookie, and the server refuses it after that. What
+// it opened is kept for this browser under the SHA-256 of its token (never the token itself), one key per
+// link, so the same link opened again here shows its download for as long as that cookie still opens it.
+const OPENED_PREFIX = "nokka-install-opened:";
+const KEY_PATTERN = /^[0-9a-f]{64}$/;
+// The token's way from the page that read it to the page loaded in place of its entry: window.name stays
+// with the tab across a same-origin load and is never sent or stored by the browser. The marker proves
+// this tab sent it; a marker without a token means this browser dropped it, and links are then checked
+// in place.
+const HANDOVER_PREFIX = "nokka-install:";
+const HANDOVER_KEY = "nokka-install-handover";
+const NO_HANDOVER_KEY = "nokka-install-no-handover";
 
 // Korean first, English below it, like the app's own registration mail.
 const copy = {
@@ -30,12 +55,17 @@ const copy = {
   missingEn: "The link address is incomplete. Open the link you received again, exactly as it is.",
   closed: "이 설치 링크는 사용할 수 없습니다. 유효 기간이 지났거나, 회수되었거나, 새 링크로 바뀌었습니다. 새 링크가 필요합니다.",
   closedEn: "This install link can't be used: it has expired, was revoked or was replaced by a newer one. You need a new link.",
+  used: "이 설치 링크는 이미 열렸습니다. 링크는 한 번만 열 수 있어, 처음 연 브라우저에서만 받을 수 있습니다. 그 브라우저에서도 다운로드가 보이지 않으면 새 링크가 필요합니다.",
+  usedEn:
+    "This install link was already opened. A link opens once, so only the browser that opened it first can download. If the download doesn't show there either, you need a new link.",
   error: "지금은 링크를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   errorEn: "The link couldn't be checked right now. Please try again in a moment.",
   retry: "다시 시도 (Try again)",
   summary: (version: string, build: number, size: string) => `Nokka ${version} (${build}) · ${size}`,
-  until: (date: string) => `${date}까지 받을 수 있습니다. 받는 중에 끊기면 이 기간 안에 다시 받으세요.`,
-  untilEn: (date: string) => `You can download it until ${date}. If the download stops, download it again before then.`,
+  until: (date: string) =>
+    `${date}까지 받을 수 있습니다. 링크는 처음 연 브라우저에서만 쓸 수 있으니, 받는 중에 끊기면 이 기간 안에 이 브라우저에서 이 페이지나 받은 링크를 다시 열어 받으세요.`,
+  untilEn: (date: string) =>
+    `You can download it until ${date}. The link works only in the browser that opened it first: if the download stops, open this page or the link again in this browser before then.`,
   download: "설치 파일 받기 (Download)",
   share: "이 링크는 받은 분만 쓸 수 있습니다. 다른 사람과 공유하지 마세요.",
   shareEn: "This link is for you only. Please don't share it.",
@@ -67,11 +97,10 @@ const kst = (locale: string) =>
 const formatKo = kst("ko-KR");
 const formatEn = kst("en-US");
 
-function isResult(value: unknown): value is InstallSessionResult {
+function isLink(value: unknown): value is Link {
   if (!value || typeof value !== "object") return false;
   const body = value as Record<string, unknown>;
   return (
-    body.ok === true &&
     typeof body.ref === "string" &&
     INSTALL_REF_PATTERN.test(body.ref) &&
     typeof body.version === "string" &&
@@ -82,8 +111,14 @@ function isResult(value: unknown): value is InstallSessionResult {
   );
 }
 
+const linkOf = ({ ref, version, build, byteLength, expiresAt }: Link): Link => ({ ref, version, build, byteLength, expiresAt });
+const isLive = (link: Link) => Date.parse(link.expiresAt) > Date.now();
+
+/** The session answer, or for a used link what the refusal says it opened (when the server tells). */
+type Answer = { kind: "opened"; link: Link } | { kind: "used"; link: Link | null } | { kind: "closed" } | { kind: "error" };
+
 /** Sends the token in the body only; the answer sets the download cookie. */
-async function openLink(token: string): Promise<State> {
+async function openLink(token: string): Promise<Answer> {
   let response: Response;
   try {
     response = await fetch(INSTALL_SESSION_ENDPOINT, {
@@ -97,23 +132,196 @@ async function openLink(token: string): Promise<State> {
   } catch {
     return { kind: "error" };
   }
-  if (response.status === 404 || response.status === 410) return { kind: "closed" };
-  if (response.status === 200) {
-    try {
-      const body: unknown = await response.json();
-      if (isResult(body)) return { kind: "ready", link: body };
-    } catch {
-      // Not the contract: shown as a failure below.
-    }
+  if (response.status === 404) return { kind: "closed" };
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Not the contract (or cut short): read as a failure, or a plain refusal.
   }
+  const fields = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (response.status === 410) {
+    if (fields.code !== "USED") return { kind: "closed" };
+    const link = isLink(fields.link) ? fields.link : isLink(fields) ? fields : null;
+    return { kind: "used", link: link && linkOf(link) };
+  }
+  if (response.status === 200 && fields.ok === true && isLink(fields)) return { kind: "opened", link: linkOf(fields) };
   return { kind: "error" };
 }
 
+/** What the token opens, or null when it can not be computed here (not a secure context). */
+async function tokenKey(token: string): Promise<string | null> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
+}
+
+/** What this browser opened with the link `key`, or null (also past its expiry, which is then removed). */
+function openedLink(key: string): Link | null {
+  try {
+    const stored = window.localStorage.getItem(OPENED_PREFIX + key);
+    if (stored === null) return null;
+    const link: unknown = JSON.parse(stored);
+    if (isLink(link) && isLive(link)) return linkOf(link);
+    window.localStorage.removeItem(OPENED_PREFIX + key);
+  } catch {
+    // Unreadable: not opened here.
+  }
+  return null;
+}
+
+/** Keeps (or with null, forgets) what the link `key` opened; other links' keys are only pruned when past expiry. */
+function keepOpened(key: string, link: Link | null) {
+  try {
+    if (link) window.localStorage.setItem(OPENED_PREFIX + key, JSON.stringify(link));
+    else window.localStorage.removeItem(OPENED_PREFIX + key);
+    for (let index = window.localStorage.length - 1; index >= 0; index--) {
+      const name = window.localStorage.key(index);
+      if (name?.startsWith(OPENED_PREFIX) && name !== OPENED_PREFIX + key) openedLink(name.slice(OPENED_PREFIX.length));
+    }
+  } catch {
+    // Only opening the same link again here is lost.
+  }
+}
+
+/** A HEAD of the link's own download address with this browser's cookie; never counted as a download. */
+async function probe(link: Link): Promise<"open" | "absent" | "closed" | "failed"> {
+  let response: Response;
+  try {
+    response = await fetch(installDownloadPath(link.ref), {
+      method: "HEAD",
+      credentials: "same-origin",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+    });
+  } catch {
+    return "failed";
+  }
+  if (response.status === 200) return "open";
+  if (response.status === 404) return "absent";
+  if (response.status === 410) return "closed";
+  return "failed";
+}
+
+/** The download of a link this browser opened before, while its cookie opens it; null if not opened here. */
+async function openedBefore(key: string): Promise<State | null> {
+  const link = openedLink(key);
+  if (!link) return null;
+  const found = await probe(link);
+  if (found === "open") return { kind: "ready", link };
+  if (found === "failed") return { kind: "error" };
+  keepOpened(key, null);
+  return found === "closed" ? { kind: "closed" } : { kind: "used", key };
+}
+
 /**
- * /install#<token>. The fragment never leaves the browser in a request, and it is removed from the
- * address bar and history as soon as it is read, also when another link is opened in the same tab later
- * (a fragment change does not load the page again). The download is an ordinary link to that link's own
- * address, so the browser's own download (and its resume) works with that link's cookie.
+ * A link's answer. A link opens once: one this browser opened before shows its download without asking
+ * again. A used link may still be this browser's: another tab opened it while this one asked, or the first
+ * answer was cut short after its cookie arrived; the refusal's link (when the server tells) is then tried.
+ */
+async function check(token: string): Promise<State> {
+  const key = await tokenKey(token);
+  const before = key ? await openedBefore(key) : null;
+  if (before) return before;
+  const answer = await openLink(token);
+  if (answer.kind === "opened") {
+    if (key) keepOpened(key, answer.link);
+    return { kind: "ready", link: answer.link };
+  }
+  if (answer.kind !== "used") return answer;
+  const here = key ? await openedBefore(key) : null;
+  if (here) return here;
+  if (answer.link && isLive(answer.link)) {
+    const found = await probe(answer.link);
+    if (found === "open") {
+      if (key) keepOpened(key, answer.link);
+      return { kind: "ready", link: answer.link };
+    }
+    if (found === "failed") return { kind: "error" };
+    if (found === "closed") return { kind: "closed" };
+  }
+  return key ? { kind: "used", key } : { kind: "used" };
+}
+
+/** The entry's history state with `shown` in place of what it showed (none for null). */
+function withShown(shown: Shown | null): Record<string, unknown> {
+  const current: unknown = window.history.state;
+  const next: Record<string, unknown> = current && typeof current === "object" ? { ...current } : {};
+  if (shown) next[SHOWN_STATE] = shown;
+  else delete next[SHOWN_STATE];
+  return next;
+}
+
+/**
+ * Keeps a final answer in this entry for a reload, back or forward. In the entry, not the tab's storage: a
+ * tab opened from this one copies its storage, never its entries.
+ */
+function remember(next: State) {
+  if (next.kind !== "closed" && next.kind !== "used" && next.kind !== "ready") return;
+  try {
+    window.history.replaceState(withShown(next), "");
+  } catch {
+    // A reload then asks for the link again.
+  }
+}
+
+/** The final answer this entry showed, or null. Past its expiry a download is closed. */
+function recall(): Shown | null {
+  const current: unknown = window.history.state;
+  const value = current && typeof current === "object" ? (current as Record<string, unknown>)[SHOWN_STATE] : null;
+  if (!value || typeof value !== "object") return null;
+  const shown = value as Record<string, unknown>;
+  if (shown.kind === "closed") return { kind: "closed" };
+  if (shown.kind === "used") {
+    return typeof shown.key === "string" && KEY_PATTERN.test(shown.key) ? { kind: "used", key: shown.key } : { kind: "used" };
+  }
+  if (shown.kind === "ready" && isLink(shown.link)) {
+    return isLive(shown.link) ? { kind: "ready", link: linkOf(shown.link) } : { kind: "closed" };
+  }
+  return null;
+}
+
+/** Sends the token to the page loaded in place of this entry; false when this tab can not. */
+function handOver(token: string): boolean {
+  try {
+    if (window.localStorage.getItem(NO_HANDOVER_KEY) !== null) return false;
+    window.sessionStorage.setItem(HANDOVER_KEY, "1");
+  } catch {
+    return false;
+  }
+  window.name = HANDOVER_PREFIX + token;
+  return true;
+}
+
+/** The token the replaced page sent, taken at once; null when none was sent from this tab. */
+function takeHandedOver(): string | null {
+  const name = window.name;
+  const token = name.startsWith(HANDOVER_PREFIX) ? name.slice(HANDOVER_PREFIX.length) : null;
+  if (token !== null) window.name = "";
+  try {
+    if (window.sessionStorage.getItem(HANDOVER_KEY) === null) return null;
+    window.sessionStorage.removeItem(HANDOVER_KEY);
+    // Sent but not arrived: this browser drops window.name, so later links are checked in place.
+    if (token === null) window.localStorage.setItem(NO_HANDOVER_KEY, "1");
+  } catch {
+    return null;
+  }
+  return token !== null && INSTALL_TOKEN_PATTERN.test(token) ? token : null;
+}
+
+/**
+ * /install#<token>. The fragment never leaves the browser in a request. As soon as it is read, it is
+ * removed from the address bar and the page loads again in place of its own history entry, the token
+ * handed over in memory: Chromium keeps the address a tab opened in that entry, and the new entry does not
+ * have it. So the tab's history holds no entry opened with a link, whatever the answer and however many
+ * links are opened one after another. The page loaded in its place checks the link once (a link opens
+ * once). A failure can be retried with the token in memory. A reload, back or forward shows the entry's last
+ * final answer again; while a link is checked it asks for the link again. A used link turns into its
+ * download as soon as another tab of this browser keeps it. The download is an ordinary link to that link's
+ * own address, so the browser's own download (and its resume) works with that link's cookie.
  */
 export default function InstallLinkPage() {
   const [state, setState] = useState<State>({ kind: "checking" });
@@ -124,43 +332,95 @@ export default function InstallLinkPage() {
   const started = useRef(false);
 
   useEffect(() => {
-    /** Reads the fragment, removes it, forgets what was shown and checks the link it names. */
+    /**
+     * Checks a link in this document; only the answer for the link opened last is shown and kept. A used
+     * link shown again is looked up once more: another tab may have kept its download since.
+     */
+    const run = (found: string | null, first: State) => {
+      token.current = found;
+      const request = ++latest.current;
+      const show = (next: State) => {
+        if (latest.current !== request) return;
+        setState(next);
+        remember(next);
+      };
+      void Promise.resolve(first).then(show);
+      if (found) void check(found).then(show);
+      else if (first.kind === "used" && first.key) {
+        void openedBefore(first.key).then((next) => {
+          if (next?.kind === "ready") show(next);
+        });
+      }
+    };
+
+    /** Reads the fragment, removes it and its entry, or takes the link the replaced page handed over. */
     const consume = (first: boolean) => {
       const { hash, pathname, search } = window.location;
       // Our own removal changes nothing; a later empty fragment keeps what is shown.
       if (!first && !hash) return;
-      if (hash) window.history.replaceState(window.history.state, "", pathname + search);
-      const fragment = hash.slice(1);
-      const found = INSTALL_TOKEN_PATTERN.test(fragment) ? fragment : null;
-      token.current = found;
-      const request = ++latest.current;
-      const show = (next: State) => {
-        if (latest.current === request) setState(next);
-      };
-      if (!found) {
-        void Promise.resolve<State>({ kind: "missing" }).then(show);
+      if (!hash) {
+        const handed = takeHandedOver();
+        run(handed, handed ? { kind: "checking" } : (recall() ?? { kind: "missing" }));
         return;
       }
-      // The previous link's download is gone at once, before the new one is checked.
-      void Promise.resolve<State>({ kind: "checking" }).then(show);
-      void openLink(found).then(show);
+      const address = pathname + search;
+      // The earlier link's answer goes with the fragment: a reload while this one is checked can't offer it.
+      window.history.replaceState(withShown(null), "", address);
+      const fragment = hash.slice(1);
+      const found = INSTALL_TOKEN_PATTERN.test(fragment) ? fragment : null;
+      // The previous link's download is gone at once.
+      if (!found || handOver(found)) {
+        run(null, { kind: "checking" });
+        replaceEntry(address);
+        return;
+      }
+      // This tab can not hand the link over: it is checked here, and its entry keeps the address.
+      run(found, { kind: "checking" });
     };
-    if (!started.current) {
+
+    const start = () => {
+      if (started.current) return;
       started.current = true;
       consume(true);
-    }
+    };
+    // A page prerendered before the person opened it must not use the link up.
+    const prerendering = (document as Document & { prerendering?: boolean }).prerendering === true;
+    if (prerendering) document.addEventListener("prerenderingchange", start, { once: true });
+    else start();
     const onHashChange = () => consume(false);
     window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
+    return () => {
+      document.removeEventListener("prerenderingchange", start);
+      window.removeEventListener("hashchange", onHashChange);
+    };
   }, []);
+
+  // Another tab of this browser kept the used link's download: show it here too.
+  const usedKey = state.kind === "used" ? state.key : undefined;
+  useEffect(() => {
+    if (!usedKey) return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== OPENED_PREFIX + usedKey || event.newValue === null) return;
+      const request = latest.current;
+      void openedBefore(usedKey).then((next) => {
+        if (next?.kind !== "ready" || latest.current !== request) return;
+        setState(next);
+        remember(next);
+      });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [usedKey]);
 
   async function retry() {
     const current = token.current;
     if (!current) return;
     const request = ++latest.current;
     setState({ kind: "checking" });
-    const next = await openLink(current);
-    if (latest.current === request) setState(next);
+    const next = await check(current);
+    if (latest.current !== request) return;
+    setState(next);
+    remember(next);
   }
 
   return (
@@ -183,6 +443,7 @@ export default function InstallLinkPage() {
         {state.kind === "checking" && <Message ko={copy.checking} en={copy.checkingEn} />}
         {state.kind === "missing" && <Message ko={copy.missing} en={copy.missingEn} />}
         {state.kind === "closed" && <Message ko={copy.closed} en={copy.closedEn} />}
+        {state.kind === "used" && <Message ko={copy.used} en={copy.usedEn} />}
         {state.kind === "error" && <Message ko={copy.error} en={copy.errorEn} />}
       </div>
 
@@ -212,7 +473,7 @@ function Message({ ko, en }: { ko: string; en: string }) {
   );
 }
 
-function Ready({ link }: { link: InstallSessionResult }) {
+function Ready({ link }: { link: Link }) {
   const until = new Date(link.expiresAt);
   const size = `${(link.byteLength / 1048576).toFixed(1)} MB`;
   return (

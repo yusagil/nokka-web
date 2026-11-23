@@ -65,7 +65,7 @@ export const copy = {
   composeHint: "메일 앱에 초안을 엽니다. 직접 보낸 뒤 상태를 안내완료로 바꿔 저장하세요.",
   installLinkLegend: "비공개 설치 링크",
   installLinkHint: (hours: number) =>
-    `이 신청자에게만 전달할 설치 파일 링크입니다. ${hours}시간 동안 쓸 수 있고, 새로 만들면 이전 링크는 바로 막힙니다. 링크 주소는 만든 직후 이 화면에서만 볼 수 있습니다.`,
+    `이 신청자에게만 전달할 설치 파일 링크입니다. 만든 때부터 ${hours}시간 동안 쓸 수 있습니다. 링크는 한 번만 열 수 있고, 처음 연 브라우저에서만 받을 수 있습니다. 새로 만들면 이전 링크는 바로 막힙니다. 링크 주소는 만든 직후 이 화면에서만 볼 수 있습니다.`,
   installLinkRevokeHint:
     "회수하거나 새로 만들면 그 링크의 새 요청(이어 받기 포함)은 바로 거절됩니다. 이미 시작된 다운로드는 중간에 끊지 않으므로 끝까지 받을 수 있습니다.",
   installLinkIssue: "설치 링크 만들기",
@@ -90,7 +90,7 @@ export const copy = {
   installLinkMailSubject: "Nokka 설치 링크 안내",
   installLinkMailBody: (name: string, url: string, until: string) =>
     `${name}님, 안녕하세요.\n\nNokka 업데이트가 승인되어 설치 파일 링크를 보내 드립니다.\n\n${url}\n\n` +
-    `이 링크는 ${until}까지 사용할 수 있습니다. 다른 사람과 공유하지 마세요.\n` +
+    `이 링크는 한 번만 열 수 있습니다. 설치할 Mac에서 열어 주세요. 처음 연 브라우저에서 ${until}까지 받을 수 있습니다. 다른 사람과 공유하지 마세요.\n` +
     "설치한 뒤 Nokka 메뉴에서 ‘업데이트 확인…’을 선택하세요. 등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요. 등록한 Mac은 앱 안에서 다음 업데이트를 받을 수 있습니다.\n\nNokka 드림",
   mailSubject: "Nokka 사용 신청 관련 안내",
   mailBody: (name: string) =>

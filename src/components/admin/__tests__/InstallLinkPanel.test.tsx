@@ -62,6 +62,8 @@ describe("InstallLinkPanel", () => {
     const body = decodeURIComponent(href.split("&body=")[1]);
     expect(body).toContain(URL_1);
     expect(body).toContain("2026. 11. 26. 12:30까지");
+    // A link opens once, so it is opened on the Mac it installs.
+    expect(body).toContain("이 링크는 한 번만 열 수 있습니다. 설치할 Mac에서 열어 주세요.");
     expect(body).toContain("김테스트님");
     // A code only when the app asks for one: an installation can take over its registration.
     expect(body).toContain("등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요.");

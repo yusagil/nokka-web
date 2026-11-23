@@ -91,10 +91,29 @@ an allowed request's card has `비공개 설치 링크`: `설치 링크 만들�
 
 - Address: `https://nokka-web.vercel.app/install#<token>`. The secret is in the fragment, which browsers never send,
   so it is never in a request path, query string or referrer: the request fields that hosting logs (Vercel Runtime
-  Logs and Log Drains) record. The `/install` page reads it, removes it from the address bar and history, and
-  sends it once in a JSON body to `POST /api/updates/v1/install/session`. It does the same when another link is
-  opened in the same tab (a fragment change, no reload): the previous download disappears first, and only the
-  answer for the link opened last is shown. An open link answers with its `ref` (a random UUID that is not
+  Logs and Log Drains) record. The `/install` page reads it, removes it from the address bar and at once loads
+  `/install` again with `location.replace`, handing the token over in `window.name` (kept by the tab across a
+  same-origin load, never sent or stored by the browser) with a `sessionStorage` marker that proves this tab sent
+  it. Chromium keeps the address a tab opened, fragment included, in that history entry (`userTypedURL`) even
+  after `history.replaceState`; the entry that replaces it does not have it. The page loaded in its place sends
+  the token once in a JSON body to `POST /api/updates/v1/install/session`. Another link opened in the same tab (a
+  fragment change) leaves its entry the same way, also while an earlier link is still checked; the previous
+  download disappears first, and only the answer for the link opened last is shown. A tab that can not store the
+  marker, or a browser that once lost a handed-over token, checks links in place instead, and that entry keeps
+  the address. A failure can be retried with the token in memory. A reload (or back and forward) shows the last
+  final answer again from the entry's own history state (`ref`, build and expiry, nothing secret), so a tab opened
+  from this one, which copies its `sessionStorage` but not its entries, never shows it; a reload while a link is
+  checked asks for the link again. A link opens once: the page keeps what a link opened in `localStorage` under its
+  own key, the SHA-256 of its token (never the token), and the same link opened again in this browser shows its
+  download while a `HEAD` of its download address still answers 200 with its cookie (404: used, the cookie is not
+  here; 410: closed). A `410 USED` gets its own text (opened before; only the first browser downloads). It is still
+  checked against this browser: another tab may have opened the link meanwhile (the used tab turns into the
+  download on that tab's `storage` event or on reload), and when the refusal names the link (`link` with `ref`,
+  build and expiry, or the same fields beside `code`) a `HEAD` with this browser's cookie recovers a first answer
+  whose body was cut short. The browser's own records of the address it opened (its history database) still hold
+  the link, as for any
+  link. A prerendered page waits until it is shown before it reads the link. An open link answers with its `ref`
+  (a random UUID that is not
   secret) and gets its own HttpOnly, Secure, `SameSite=Strict` cookie, `__Secure-nokka-install-<ref>`, scoped to
   `/api/updates/v1/install/<ref>` for the link's remaining lifetime.
 - Download: the page's button is an ordinary link to that link's own `GET`/`HEAD
