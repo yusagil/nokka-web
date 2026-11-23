@@ -27,6 +27,15 @@ export type ResolvedInstallLink = {
   info: PackageInfo;
 };
 
+export type ExchangeOutcome =
+  /** This call consumed the token; `maxAge` is the link's remaining whole seconds (at least 1). */
+  | { kind: "opened"; link: ResolvedInstallLink; maxAge: number }
+  | { kind: "not_found" }
+  /** Closed (as `live` is false), or less than a second left. The token stays unused. */
+  | { kind: "gone" }
+  /** Still open, but its token was already exchanged once: `link` names it, without any session. */
+  | { kind: "used"; link: ResolvedInstallLink };
+
 export type InstallLinkStore = {
   /**
    * Revokes the request's open link (if any) and stores a new one for the current installer, valid for
@@ -35,11 +44,45 @@ export type InstallLinkStore = {
   issue(applicationId: string, params: { tokenHash: Buffer; ttlSeconds: number }): Promise<IssueOutcome>;
   /** Revokes the request's open link; `revoked` counts links that were still unexpired. */
   revoke(applicationId: string): Promise<RevokeOutcome>;
-  /** Null for an unknown token. Approval, expiry, revocation and the package are read fresh. */
-  resolve(tokenHash: Buffer): Promise<ResolvedInstallLink | null>;
+  /**
+   * Opens the link once: if it is open and its token was never exchanged, stores `sessionHash` as its one
+   * session and marks the token used, in one transaction holding the link row. Of concurrent calls with the
+   * same token exactly one opens it; a call that fails or is refused leaves the token unused.
+   */
+  exchange(tokenHash: Buffer, sessionHash: Buffer): Promise<ExchangeOutcome>;
+  /** Null for an unknown session. Approval, expiry, revocation and the package are read fresh. */
+  resolveSession(sessionHash: Buffer): Promise<ResolvedInstallLink | null>;
   /** Counts a download that started sending bytes. */
   recordDownload(id: string): Promise<void>;
 };
+
+type LinkRow = {
+  id: string;
+  ref: string;
+  live: boolean;
+  expiresAt: string;
+  build: number;
+  version: string;
+  byte_length: string;
+  sha256: Buffer;
+  chunk_size: number;
+  chunk_count: number;
+};
+
+const toResolvedLink = (row: LinkRow): ResolvedInstallLink => ({
+  id: row.id,
+  ref: row.ref,
+  live: row.live,
+  version: row.version,
+  expiresAt: row.expiresAt,
+  info: {
+    build: row.build,
+    byteLength: Number(row.byte_length),
+    sha256Hex: Buffer.from(row.sha256).toString("hex"),
+    chunkSize: row.chunk_size,
+    chunkCount: row.chunk_count,
+  },
+});
 
 export function createInstallLinkStore(sql: Database): InstallLinkStore {
   return {
@@ -91,21 +134,44 @@ export function createInstallLinkStore(sql: Database): InstallLinkStore {
       });
     },
 
-    async resolve(tokenHash) {
-      const [row] = await sql<
-        {
-          id: string;
-          ref: string;
-          live: boolean;
-          expiresAt: string;
-          build: number;
-          version: string;
-          byte_length: string;
-          sha256: Buffer;
-          chunk_size: number;
-          chunk_count: number;
-        }[]
-      >`
+    async exchange(tokenHash, sessionHash) {
+      return sql.begin(async (tx): Promise<ExchangeOutcome> => {
+        // The link row first: another exchange of this token, and a revocation, replacement or approval
+        // withdrawal (they all update this row), either commits first or waits for this transaction.
+        const [locked] = await tx<{ id: string }[]>`
+          SELECT id::text AS id FROM update_install_links WHERE token_hash = ${tokenHash} FOR UPDATE
+        `;
+        if (!locked) return { kind: "not_found" };
+        // Then everything is judged as it is once the row is held, however long that took: a new statement
+        // reads what has been committed since (approval and package included), and clock_timestamp() is
+        // the time now, where now() would still be when the transaction began. The lifetime comes from the
+        // same clock, so a token is only consumed for a cookie that lasts.
+        const [row] = await tx<(LinkRow & { used: boolean; maxAge: number })[]>`
+          SELECT l.id::text AS id, l.ref::text AS ref,
+                 (l.revoked_at IS NULL AND l.expires_at > c.at AND a.updates_approved
+                   AND p.verified_at IS NOT NULL AND p.state <> 'withdrawn') AS live,
+                 l.exchanged_at IS NOT NULL AS used,
+                 floor(extract(epoch FROM l.expires_at - c.at))::int AS "maxAge",
+                 to_char(l.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "expiresAt",
+                 p.build, p.short_version AS version, p.byte_length, p.sha256, p.chunk_size, p.chunk_count
+          FROM update_install_links l
+          CROSS JOIN (SELECT clock_timestamp() AS at) c
+          JOIN access_applications a ON a.id = l.application_id
+          JOIN update_packages p ON p.build = l.build
+          WHERE l.id = ${locked.id}::bigint
+        `;
+        if (!row.live || row.maxAge < 1) return { kind: "gone" };
+        if (row.used) return { kind: "used", link: toResolvedLink(row) };
+        await tx`
+          UPDATE update_install_links SET exchanged_at = clock_timestamp(), session_hash = ${sessionHash}
+          WHERE id = ${row.id}::bigint
+        `;
+        return { kind: "opened", link: toResolvedLink(row), maxAge: row.maxAge };
+      });
+    },
+
+    async resolveSession(sessionHash) {
+      const [row] = await sql<LinkRow[]>`
         SELECT l.id::text AS id, l.ref::text AS ref,
                (l.revoked_at IS NULL AND l.expires_at > now() AND a.updates_approved
                  AND p.verified_at IS NOT NULL AND p.state <> 'withdrawn') AS live,
@@ -114,23 +180,9 @@ export function createInstallLinkStore(sql: Database): InstallLinkStore {
         FROM update_install_links l
         JOIN access_applications a ON a.id = l.application_id
         JOIN update_packages p ON p.build = l.build
-        WHERE l.token_hash = ${tokenHash}
+        WHERE l.session_hash = ${sessionHash}
       `;
-      if (!row) return null;
-      return {
-        id: row.id,
-        ref: row.ref,
-        live: row.live,
-        version: row.version,
-        expiresAt: row.expiresAt,
-        info: {
-          build: row.build,
-          byteLength: Number(row.byte_length),
-          sha256Hex: Buffer.from(row.sha256).toString("hex"),
-          chunkSize: row.chunk_size,
-          chunkCount: row.chunk_count,
-        },
-      };
+      return row ? toResolvedLink(row) : null;
     },
 
     async recordDownload(id) {

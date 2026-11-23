@@ -20,7 +20,8 @@ function fakeLinks(issue: IssueOutcome = ISSUED, revoke: RevokeOutcome = { kind:
   return {
     issue: vi.fn<InstallLinkStore["issue"]>(async () => issue),
     revoke: vi.fn<InstallLinkStore["revoke"]>(async () => revoke),
-    resolve: vi.fn<InstallLinkStore["resolve"]>(),
+    exchange: vi.fn<InstallLinkStore["exchange"]>(),
+    resolveSession: vi.fn<InstallLinkStore["resolveSession"]>(),
     recordDownload: vi.fn<InstallLinkStore["recordDownload"]>(),
   };
 }

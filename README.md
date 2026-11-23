@@ -100,29 +100,47 @@ an allowed request's card has `비공개 설치 링크`: `설치 링크 만들�
 - Download: the page's button is an ordinary link to that link's own `GET`/`HEAD
   /api/updates/v1/install/<ref>/Nokka.dmg`, so the browser's own download and its resume (`Range` with `If-Range`)
   work with that link's cookie. Links opened in several tabs never share a cookie: each tab downloads and resumes
-  exactly the link and build it shows. The address only opens with the secret of the link `ref`; the `ref` in
-  logs opens nothing. Tools can send `Authorization: Bearer <token>` instead. Answers carry
-  `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and `Content-Disposition: attachment`. A
-  missing, malformed, unknown or other link's token gets 404, and a closed link 410; both clear that link's cookie.
-  Refusals are short plain text without package bytes. The secret still travels in the mail itself, which is the
-  delivery channel.
+  exactly the link and build it shows. The address only opens with the session of the link `ref`; the `ref` in
+  logs opens nothing. Tools open the link with the same `POST` and send the cookie, or its value as
+  `Authorization: Bearer`. Answers carry `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and
+  `Content-Disposition: attachment`. A missing, malformed, unknown or other link's session (the link's own token
+  included) gets 404, and a closed link 410; both clear that link's cookie. Refusals are short plain text without
+  package bytes. The secret still travels in the mail itself, which is the delivery channel.
+- Opens once: the first successful `POST /api/updates/v1/install/session` consumes the link's token and stores the
+  SHA-256 of a new session secret, which the cookie carries instead of the token. Every later `POST` with that
+  token, at the same time or after, gets 410 `USED` with no cookie but the same `ref` and package details as the
+  first answer (nothing secret); a closed link answers a plain `GONE` first. The session keeps downloading and
+  resuming until the link closes. The opening is one transaction that holds the link row and
+  only then judges it, by what is committed and the clock at that moment, so concurrent openings, revocation,
+  replacement and approval withdrawal take turns, an opening that waited past the expiry is refused, and a refused
+  or failed opening (404, 410, 503) leaves the token unused for a retry. A page that lost the successful answer's
+  body, or whose tab was refused because another tab of the same browser opened the link first, checks `HEAD` on
+  the named download address with the browser's cookies: 200 means this browser holds the session and can download
+  and resume. A browser without that session (another browser, or the cookie was lost too) gets 404 and needs a new
+  link: the token never makes a second session. Links issued before migration 0008 can still be opened once;
+  download cookies set before it carried the token and are refused (404) and cleared, so the link is opened again.
 - Closing: one open link per request. A new link revokes the previous one, `링크 회수` (`DELETE` on the same admin
   path) revokes it, and withdrawing the approval revokes it for good: allowing updates again needs a new link.
   Expiry, revocation and withdrawal refuse every **new** request at once, including the session, `HEAD` and a
   resumed range. **A response that is already sending bytes is not cut off and can finish**; the next request is
-  refused. The database keeps only the token's SHA-256, the build, the times and a download count (no addresses).
+  refused. The database keeps only the token's and the session's SHA-256, the build, the times and a download
+  count (no addresses).
 - Installer: `node scripts/update-packages.mjs installer --build <N|none>` chooses what new links serve. It can be
   the verified bridge build (stage it with its manifest; it is never published) or a published build. Withdrawing
   or rolling back that build clears the choice and closes its links. `status` shows it as `install links`.
 - API: `POST`/`DELETE /api/admin/applications/:id/install-link`, with the same admin checks as the inbox API.
   `POST` answers 409 `UPDATES_NOT_APPROVED` or `NO_INSTALLER` when no link can be issued.
 - Code: `src/lib/update-packages/install-{contracts,handlers,links}.ts`, `src/app/install`,
-  `src/components/install/InstallLinkPage.tsx`, `src/components/admin/InstallLinkPanel.tsx`, migration 0007.
-  `install-links.integration.test.ts` runs on Postgres with `APPLICATIONS_TEST_DATABASE_URL`. It covers issuing,
-  downloads over local HTTP, two links open in one browser, replacement, revocation (including a download already
-  under way), expiry, approval and package withdrawal, and checks that no request line carried a secret.
-- Before release, check on an isolated Preview with a synthetic link: open it, download in full and resumed, and
-  confirm that neither the Runtime Logs nor an active Log Drain contain the token.
+  `src/components/install/InstallLinkPage.tsx`, `src/components/admin/InstallLinkPanel.tsx`, migrations 0007 and
+  0008. `install-links.integration.test.ts` runs on Postgres with `APPLICATIONS_TEST_DATABASE_URL`. It covers
+  issuing, downloads over local HTTP, two links open in one browser, replacement, revocation (including a download
+  already under way), expiry, approval and package withdrawal, opening once (many openings at once, a revocation,
+  expiry or approval withdrawal while an opening waits, a failed opening retried, a lost first answer with and
+  without its cookie, resumes until expiry, links issued before 0008), and checks that no request line carried a
+  secret.
+- Before release, check on an isolated Preview with a synthetic link: open it, download in full and resumed, open
+  it again (410 `USED`), and confirm that neither the Runtime Logs nor an active Log Drain contain the token or the
+  session secret.
 
 ## Daily digest
 
