@@ -346,7 +346,7 @@ describe("install link download (the link's own address, its session cookie or b
       expect(response.status).toBe(200);
       expectLinkHeaders(response);
       expect(response.headers.get("content-disposition")).toBe('attachment; filename="Nokka-2.7.0.dmg"');
-      expect(response.headers.get("content-type")).toBe("application/octet-stream");
+      expect(response.headers.get("content-type")).toBe("application/x-apple-diskimage");
       expect(response.headers.get("content-length")).toBe(String(bytes.length));
       expect(response.headers.get("etag")).toBe(`"${info.sha256Hex}"`);
       expect(response.headers.has("set-cookie")).toBe(false);
@@ -363,6 +363,7 @@ describe("install link download (the link's own address, its session cookie or b
     const head = await get({ cookie: secret, method: "HEAD" });
     expect(head.status).toBe(200);
     expect(head.body).toBeNull();
+    expect(head.headers.get("content-type")).toBe("application/x-apple-diskimage");
     expect(head.headers.get("content-length")).toBe(String(bytes.length));
 
     expect((await get({ cookie: secret, headers: { "if-none-match": `"${info.sha256Hex}"` } })).status).toBe(304);
@@ -370,6 +371,7 @@ describe("install link download (the link's own address, its session cookie or b
     // A browser resuming: an open range checked against the ETag, with the same session.
     const resumed = await get({ cookie: secret, headers: { range: `bytes=${CHUNK - 5}-`, "if-range": `"${info.sha256Hex}"` } });
     expect(resumed.status).toBe(206);
+    expect(resumed.headers.get("content-type")).toBe("application/x-apple-diskimage");
     expect(resumed.headers.get("content-range")).toBe(`bytes ${CHUNK - 5}-${bytes.length - 1}/${bytes.length}`);
     expect(Array.from(new Uint8Array(await resumed.arrayBuffer()))).toEqual(Array.from(bytes.slice(CHUNK - 5)));
 

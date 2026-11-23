@@ -12,7 +12,9 @@
 //   --parallel <n>        full downloads at the same time (default 1)
 // Every protected answer must carry Cache-Control private, no-store and Vary: Authorization. A refused
 // request must get a short JSON error: no package bytes, no validators, no Location. After an active
-// download the same URLs are requested again without a token.
+// download the same URLs are requested again without a token. Requests ask for no compression, except a
+// HEAD and the first full download, which accept br as the app does: the package must not be compressed
+// for them either.
 // Exit status: 0 every check passed, 1 a check failed, 2 usage error.
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
@@ -22,6 +24,7 @@ const FEED_PATH = "/api/updates/v1/appcast.xml";
 const packagePath = (build) => `/api/updates/v1/packages/${build}/Nokka.dmg`;
 const UNKNOWN_TOKEN = "A".repeat(43);
 const RESUME_AT = 1024 * 1024 + 17; // inside the third 512 KiB chunk
+const ACCEPTS_BR = { "Accept-Encoding": "gzip, deflate, br" }; // URLSession's over HTTPS
 
 class UsageError extends Error {}
 
@@ -49,6 +52,18 @@ export async function checkEndpoints({ origin, token = null, expect = token ? "a
     const vary = response.headers.get("vary") ?? "";
     const ok = /\bprivate\b/.test(cache) && /\bno-store\b/.test(cache) && /\bauthorization\b/i.test(vary);
     record(ok, `${label}: private, no-store, Vary Authorization`, ok ? "" : `Cache-Control "${cache}", Vary "${vary}"`);
+  };
+
+  // The app's URLSession accepts br over HTTPS, as browsers do. A CDN that compresses the package for
+  // them drops its length and Accept-Ranges and weakens its ETag (Vercel does for octet-stream), so
+  // nothing can resume it.
+  const checkUncompressed = (label, response, etag) => {
+    const encoding = response.headers.get("content-encoding");
+    const ranges = response.headers.get("accept-ranges");
+    const sameETag = response.headers.get("etag") === etag && !etag.startsWith("W/");
+    const ok = response.status === 200 && encoding === null && sameETag && ranges === "bytes";
+    record(ok, `${label} accepting br → not compressed, same strong ETag, Accept-Ranges bytes`, ok ? "" :
+      `status ${response.status}, Content-Encoding ${encoding ?? "none"}, ETag ${sameETag ? "same" : "different"}, Accept-Ranges ${ranges ?? "none"}`);
   };
 
   const refused = async (label, response, status, code) => {
@@ -108,6 +123,10 @@ export async function checkEndpoints({ origin, token = null, expect = token ? "a
     const headOK = pkgHead.status === 200 && pkgHead.headers.get("accept-ranges") === "bytes" && Boolean(etag);
     record(headOK, `active HEAD package ${target} → 200, Accept-Ranges bytes, ETag`, `status ${pkgHead.status}`);
     checkPrivate(`active HEAD package ${target}`, pkgHead);
+    if (headOK) {
+      checkUncompressed(`active HEAD package ${target}`,
+        await request(packagePath(target), { method: "HEAD", auth: token, headers: ACCEPTS_BR }), etag);
+    }
     const headLength = pkgHead.headers.get("content-length");
     let size = headLength !== null && /^[1-9]\d*$/.test(headLength) ? Number(headLength) : NaN;
     if (headLength === null && headOK) {
@@ -166,13 +185,17 @@ export async function checkEndpoints({ origin, token = null, expect = token ? "a
         record(staleRange.status === 200, "active If-Range with another ETag → whole file 200", `got ${staleRange.status}`);
       }
 
-      const downloads = await Promise.all(Array.from({ length: parallel }, () => fullDownload(request, packagePath(target), token)));
+      // The first download accepts br as the app does (fetch decodes it, so its bytes are checked all the
+      // same); its headers show whether anything on the way compressed the package.
+      const downloads = await Promise.all(Array.from({ length: parallel }, (_, i) =>
+        fullDownload(request, packagePath(target), token, i === 0 ? ACCEPTS_BR : {})));
       downloads.forEach((d, i) => {
         const ok = d.status === 200 && d.length === size && (!manifest || d.sha256 === manifest.sha256);
         record(ok, `active full download ${i + 1}/${parallel}: ${d.length} bytes${manifest ? ", manifest SHA-256" : ""}`,
           ok ? `${(d.length / 1048576 / Math.max(d.seconds, 0.001)).toFixed(1)} MiB/s` : `status ${d.status}, ${d.length} bytes`);
       });
       const whole = downloads[0];
+      checkUncompressed(`active full download 1/${parallel}`, whole, etag);
       if (whole.status === 200) {
         const resumed = await interruptedDownload(request, packagePath(target), token, Math.min(RESUME_AT, size - 1));
         record(resumed.sha256 === whole.sha256 && resumed.length === size,
@@ -198,9 +221,9 @@ export async function checkEndpoints({ origin, token = null, expect = token ? "a
   return { passed: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
 }
 
-async function fullDownload(request, path, token) {
+async function fullDownload(request, path, token, headers = {}) {
   const started = performance.now();
-  const response = await request(path, { auth: token });
+  const response = await request(path, { auth: token, headers });
   const hash = createHash("sha256");
   let length = 0;
   if (response.body) {
@@ -209,7 +232,7 @@ async function fullDownload(request, path, token) {
       length += chunk.length;
     }
   }
-  return { status: response.status, length, sha256: hash.digest("hex"), seconds: (performance.now() - started) / 1000 };
+  return { status: response.status, headers: response.headers, length, sha256: hash.digest("hex"), seconds: (performance.now() - started) / 1000 };
 }
 
 /** Reads the first `cutAt` bytes, drops the connection, then fetches the rest with an open range. */
