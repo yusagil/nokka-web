@@ -63,6 +63,9 @@ describe("InstallLinkPanel", () => {
     expect(body).toContain(URL_1);
     expect(body).toContain("2026. 11. 26. 12:30까지");
     expect(body).toContain("김테스트님");
+    // A code only when the app asks for one: an installation can take over its registration.
+    expect(body).toContain("등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요.");
+    expect(body).not.toContain("코드를 받아 이 Mac을 등록하면");
     expect(screen.getByRole("button", { name: copy.installLinkReissue })).toBeInTheDocument();
   });
 

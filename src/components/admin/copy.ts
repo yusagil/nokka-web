@@ -91,7 +91,7 @@ export const copy = {
   installLinkMailBody: (name: string, url: string, until: string) =>
     `${name}님, 안녕하세요.\n\nNokka 업데이트가 승인되어 설치 파일 링크를 보내 드립니다.\n\n${url}\n\n` +
     `이 링크는 ${until}까지 사용할 수 있습니다. 다른 사람과 공유하지 마세요.\n` +
-    "설치한 뒤 Nokka 메뉴의 ‘업데이트 확인…’에서 이 이메일 주소로 코드를 받아 이 Mac을 등록하면, 앱 안에서 다음 업데이트를 받을 수 있습니다.\n\nNokka 드림",
+    "설치한 뒤 Nokka 메뉴에서 ‘업데이트 확인…’을 선택하세요. 등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요. 등록한 Mac은 앱 안에서 다음 업데이트를 받을 수 있습니다.\n\nNokka 드림",
   mailSubject: "Nokka 사용 신청 관련 안내",
   mailBody: (name: string) =>
     `${name}님, 안녕하세요.\n\nNokka 사용을 신청해 주셔서 감사합니다.\n\n\n\nNokka 드림`,

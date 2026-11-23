@@ -69,6 +69,17 @@ describe("InstallLinkPage", () => {
     expect(document.body.innerHTML).not.toContain(TOKEN);
   });
 
+  it("asks for a code after installing only when the registration screen opens", async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, READY));
+    open(`/install#${TOKEN}`);
+    await screen.findByRole("link", { name: DOWNLOAD });
+    const steps = screen.getAllByRole("listitem");
+    const code = steps.filter((step) => step.textContent!.includes("8자리 코드"));
+    expect(code).toHaveLength(1);
+    expect(code[0]).toHaveTextContent(/^등록 화면이 열리면 .*등록 화면이 열리지 않으면 이 Mac은 이미 등록되어 있습니다\./);
+    expect(code[0]).toHaveTextContent(/If the registration screen opens, .*If it doesn't open, this Mac is already registered\.$/);
+  });
+
   it.each([
     ["no fragment", "/install"],
     ["a malformed fragment", "/install#abc"],
