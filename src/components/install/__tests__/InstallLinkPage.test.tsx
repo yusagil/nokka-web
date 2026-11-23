@@ -76,8 +76,10 @@ describe("InstallLinkPage", () => {
     const steps = screen.getAllByRole("listitem");
     const code = steps.filter((step) => step.textContent!.includes("8자리 코드"));
     expect(code).toHaveLength(1);
-    expect(code[0]).toHaveTextContent(/^등록 화면이 열리면 .*등록 화면이 열리지 않으면 이 Mac은 이미 등록되어 있습니다\./);
-    expect(code[0]).toHaveTextContent(/If the registration screen opens, .*If it doesn't open, this Mac is already registered\.$/);
+    expect(code[0]).toHaveTextContent(/^등록 화면이 열리면 .*다른 창이 열리면 그 창에 표시된 내용을 확인합니다\./);
+    expect(code[0]).toHaveTextContent(/If the registration screen opens, .*If a different window opens, check what it shows\.$/);
+    // Another window can be an error or a failed connection: nothing claims the Mac is registered.
+    expect(document.body).not.toHaveTextContent(/이미 등록|already registered/);
   });
 
   it.each([

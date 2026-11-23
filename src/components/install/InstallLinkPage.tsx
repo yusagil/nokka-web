@@ -43,11 +43,11 @@ const copy = {
   steps: [
     ["받은 DMG를 열고 Nokka를 응용 프로그램 폴더로 옮긴 뒤 엽니다.", "Open the DMG, move Nokka to Applications and open it."],
     ["Nokka 메뉴에서 ‘업데이트 확인…’을 선택합니다.", "In the Nokka menu, choose ‘업데이트 확인…’ (Check for Updates…)."],
-    // An installation that took over its registration (an update whose final replacement failed, installed
-    // again in the same place before the old app was opened) opens no registration, so no code is asked for.
+    // A code only when the app asks for one: an installation can take over its registration. Another window
+    // may be an update, an error or a failed connection, so it is read, not taken as a registration.
     [
-      "등록 화면이 열리면 사용 신청 때 쓴 이메일을 입력하고 ‘코드 받기’를 누른 뒤, 메일로 받은 8자리 코드를 입력하고 ‘등록’을 누릅니다. 등록 화면이 열리지 않으면 이 Mac은 이미 등록되어 있습니다.",
-      "If the registration screen opens, enter the email you applied with, press ‘코드 받기’ (Get code), then enter the 8-digit code from the mail and press ‘등록’ (Register). If it doesn't open, this Mac is already registered.",
+      "등록 화면이 열리면 사용 신청 때 쓴 이메일을 입력하고 ‘코드 받기’를 누른 뒤, 메일로 받은 8자리 코드를 입력하고 ‘등록’을 누릅니다. 다른 창이 열리면 그 창에 표시된 내용을 확인합니다.",
+      "If the registration screen opens, enter the email you applied with, press ‘코드 받기’ (Get code), then enter the 8-digit code from the mail and press ‘등록’ (Register). If a different window opens, check what it shows.",
     ],
   ],
   registered: "등록한 Mac은 앱 안에서 다음 업데이트를 받습니다.",
