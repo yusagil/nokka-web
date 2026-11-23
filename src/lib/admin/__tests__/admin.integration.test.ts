@@ -2,6 +2,7 @@
 // Runs against a real Postgres only when APPLICATIONS_TEST_DATABASE_URL is set (a disposable, direct
 // test database). Everything happens in a fresh schema that is dropped afterwards; synthetic data only.
 import { createHmac, randomUUID } from "node:crypto";
+import { inspect } from "node:util";
 import { Pool } from "pg";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
@@ -346,6 +347,52 @@ describe.skipIf(!url)("admin inbox on Postgres", () => {
       );
       expect(patch.status).toBe(200);
       expect((await patch.json()).item).toMatchObject({ id, status: "contacted" });
+    });
+
+    it("sends a forged or cookieless OAuth state back to login without logging the state", async () => {
+      const logged = [vi.spyOn(console, "error"), vi.spyOn(console, "warn")].map((spy) =>
+        spy.mockImplementation(() => {}),
+      );
+      try {
+        const { auth } = holder.current!;
+        const signIn = await auth.handler(
+          new Request(`${BASE_URL}/api/auth/sign-in/social`, {
+            method: "POST",
+            headers: { origin: BASE_URL, "content-type": "application/json" },
+            body: JSON.stringify({
+              provider: "github",
+              callbackURL: "/admin/applications",
+              errorCallbackURL: "/admin/login",
+            }),
+          }),
+        );
+        const issued = new URL((await signIn.json()).url).searchParams.get("state")!;
+        const forged = `qa-state-${run}-forged`;
+        const code = `qa-code-${run}`;
+
+        // An issued state is still a mismatch without the signed state cookie of the browser that started it.
+        for (const state of [forged, issued]) {
+          const callback = await auth.handler(
+            new Request(`${BASE_URL}/api/auth/callback/github?code=${code}&state=${state}`),
+          );
+          expect(callback.status).toBe(302);
+          expect(new URL(callback.headers.get("location")!, BASE_URL).href).toBe(
+            `${BASE_URL}/admin/login?error=state_mismatch`,
+          );
+        }
+
+        const [errors] = logged;
+        for (const errorCode of ["state_mismatch", "state_security_mismatch"]) {
+          expect(errors).toHaveBeenCalledWith("[better-auth]", "Failed to parse state", {
+            name: "BetterAuthError",
+            code: errorCode,
+          });
+        }
+        const output = inspect(logged.map((spy) => spy.mock.calls), { depth: null });
+        for (const value of [issued, forged, code]) expect(output).not.toContain(value);
+      } finally {
+        logged.forEach((spy) => spy.mockRestore());
+      }
     });
   });
 });
