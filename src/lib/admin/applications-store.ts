@@ -101,9 +101,11 @@ export function createAdminApplicationsStore(sql: Database): AdminApplicationsSt
           return exists ? { kind: "conflict" } : { kind: "not_found" };
         }
         if (approved === false) {
-          // Withdrawn: the registered Mac (pointer cleared above), its sessions (new generation) and
-          // unused codes all end in this transaction. Turning it back on later needs a new code.
+          // Withdrawn: the registered Mac (pointer cleared above), its sessions (new generation), unused
+          // codes and the open install link all end in this transaction. Turning it back on later needs
+          // a new code (and a new link).
           await tx`UPDATE update_challenges SET state = 'void' WHERE application_id = ${id}::bigint AND state = 'pending'`;
+          await tx`UPDATE update_install_links SET revoked_at = now() WHERE application_id = ${id}::bigint AND revoked_at IS NULL`;
         }
         return { kind: "updated", item: toItem(row) };
       });

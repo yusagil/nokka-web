@@ -83,6 +83,89 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
 - Tests: `src/lib/admin/__tests__/admin.integration.test.ts` runs with `APPLICATIONS_TEST_DATABASE_URL`, like
   the other integration tests. It covers paging, search, saves and real Better Auth session checks.
 
+## Private install links
+
+A person whose updates are allowed can get a full installer without any public download. In the admin inbox,
+an allowed request's card has `비공개 설치 링크`: `설치 링크 만들기` issues a link valid for 72 hours
+(`INSTALL_LINK_TTL_HOURS`), shows its address once, and opens a mail draft to the stored email
+(`링크 메일 작성`, sent by the operator). Nothing is mailed automatically.
+
+- Address: `https://nokka-web.vercel.app/install#<token>`. The secret is in the fragment, which browsers never send,
+  so it is never in a request path, query string or referrer: the request fields that hosting logs (Vercel Runtime
+  Logs and Log Drains) record. The `/install` page reads it, removes it from the address bar and at once loads
+  `/install` again with `location.replace`, handing the token over in `window.name` (kept by the tab across a
+  same-origin load, never sent or stored by the browser) with a `sessionStorage` marker that proves this tab sent
+  it. Chromium keeps the address a tab opened, fragment included, in that history entry (`userTypedURL`) even
+  after `history.replaceState`; the entry that replaces it does not have it. The page loaded in its place sends
+  the token once in a JSON body to `POST /api/updates/v1/install/session`. Another link opened in the same tab (a
+  fragment change) leaves its entry the same way, also while an earlier link is still checked; the previous
+  download disappears first, and only the answer for the link opened last is shown. A tab that can not store the
+  marker, or a browser that once lost a handed-over token, checks links in place instead, and that entry keeps
+  the address. A failure can be retried with the token in memory. A reload (or back and forward) shows the last
+  final answer again from the entry's own history state (`ref`, build and expiry, nothing secret), so a tab opened
+  from this one, which copies its `sessionStorage` but not its entries, never shows it. A download shown again (also
+  from the back-forward cache) keeps its button only once a `HEAD` of its address still answers 200 with this
+  browser's cookie (no button while it is asked): 410 (revoked, replaced or expired since) or 404 (the cookie is
+  gone) shows it as closed from then on, past its expiry it is closed without asking, and an unreachable address
+  leaves it as it was. A reload while a link is
+  checked asks for the link again. A link opens once: the page keeps what a link opened in `localStorage` under its
+  own key, the SHA-256 of its token (never the token), and the same link opened again in this browser shows its
+  download while a `HEAD` of its download address still answers 200 with its cookie (404: used, the cookie is not
+  here; 410: closed). A `410 USED` gets its own text (opened before; only the first browser downloads). It is still
+  checked against this browser: another tab may have opened the link meanwhile (the used tab turns into the
+  download on that tab's `storage` event or on reload), and when the refusal names the link (`link` with `ref`,
+  build and expiry, or the same fields beside `code`) a `HEAD` with this browser's cookie recovers a first answer
+  whose body was cut short. The browser's own records of the address it opened (its history database) still hold
+  the link, as for any
+  link. A prerendered page waits until it is shown before it reads the link. An open link answers with its `ref`
+  (a random UUID that is not
+  secret) and gets its own HttpOnly, Secure, `SameSite=Strict` cookie, `__Secure-nokka-install-<ref>`, scoped to
+  `/api/updates/v1/install/<ref>` for the link's remaining lifetime.
+- Download: the page's button is an ordinary link to that link's own `GET`/`HEAD
+  /api/updates/v1/install/<ref>/Nokka.dmg`, so the browser's own download and its resume (`Range` with `If-Range`)
+  work with that link's cookie. Links opened in several tabs never share a cookie: each tab downloads and resumes
+  exactly the link and build it shows. The address only opens with the session of the link `ref`; the `ref` in
+  logs opens nothing. Tools open the link with the same `POST` and send the cookie, or its value as
+  `Authorization: Bearer`. Answers carry `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and
+  `Content-Disposition: attachment`. A missing, malformed, unknown or other link's session (the link's own token
+  included) gets 404, and a closed link 410; both clear that link's cookie. Refusals are short plain text without
+  package bytes. The secret still travels in the mail itself, which is the delivery channel.
+- Opens once: the first successful `POST /api/updates/v1/install/session` consumes the link's token and stores the
+  SHA-256 of a new session secret, which the cookie carries instead of the token. Every later `POST` with that
+  token, at the same time or after, gets 410 `USED` with no cookie but the same `ref` and package details as the
+  first answer (nothing secret); a closed link answers a plain `GONE` first. The session keeps downloading and
+  resuming until the link closes. The opening is one transaction that holds the link row and
+  only then judges it, by what is committed and the clock at that moment, so concurrent openings, revocation,
+  replacement and approval withdrawal take turns, an opening that waited past the expiry is refused, and a refused
+  or failed opening (404, 410, 503) leaves the token unused for a retry. A page that lost the successful answer's
+  body, or whose tab was refused because another tab of the same browser opened the link first, checks `HEAD` on
+  the named download address with the browser's cookies: 200 means this browser holds the session and can download
+  and resume. A browser without that session (another browser, or the cookie was lost too) gets 404 and needs a new
+  link: the token never makes a second session. Links issued before migration 0008 can still be opened once;
+  download cookies set before it carried the token and are refused (404) and cleared, so the link is opened again.
+- Closing: one open link per request. A new link revokes the previous one, `링크 회수` (`DELETE` on the same admin
+  path) revokes it, and withdrawing the approval revokes it for good: allowing updates again needs a new link.
+  Expiry, revocation and withdrawal refuse every **new** request at once, including the session, `HEAD` and a
+  resumed range. **A response that is already sending bytes is not cut off and can finish**; the next request is
+  refused. The database keeps only the token's and the session's SHA-256, the build, the times and a download
+  count (no addresses).
+- Installer: `node scripts/update-packages.mjs installer --build <N|none>` chooses what new links serve. It can be
+  the verified bridge build (stage it with its manifest; it is never published) or a published build. Withdrawing
+  or rolling back that build clears the choice and closes its links. `status` shows it as `install links`.
+- API: `POST`/`DELETE /api/admin/applications/:id/install-link`, with the same admin checks as the inbox API.
+  `POST` answers 409 `UPDATES_NOT_APPROVED` or `NO_INSTALLER` when no link can be issued.
+- Code: `src/lib/update-packages/install-{contracts,handlers,links}.ts`, `src/app/install`,
+  `src/components/install/InstallLinkPage.tsx`, `src/components/admin/InstallLinkPanel.tsx`, migrations 0007 and
+  0008. `install-links.integration.test.ts` runs on Postgres with `APPLICATIONS_TEST_DATABASE_URL`. It covers
+  issuing, downloads over local HTTP, two links open in one browser, replacement, revocation (including a download
+  already under way), expiry, approval and package withdrawal, opening once (many openings at once, a revocation,
+  expiry or approval withdrawal while an opening waits, a failed opening retried, a lost first answer with and
+  without its cookie, resumes until expiry, links issued before 0008), and checks that no request line carried a
+  secret.
+- Before release, check on an isolated Preview with a synthetic link: open it, download in full and resumed, open
+  it again (410 `USED`), and confirm that neither the Runtime Logs nor an active Log Drain contain the token or the
+  session secret.
+
 ## Daily digest
 
 Vercel Cron calls `GET /api/cron/application-digest` once a day (`vercel.json`: `0 0 * * *` UTC, 09:00 KST).

@@ -1,6 +1,6 @@
-// Client-safe contract for the private admin inbox (POST /api/admin/applications/search and
-// PATCH /api/admin/applications/:id). Shared by the admin UI and the route handlers; keep server-only
-// imports (database, auth, env) out of this file.
+// Client-safe contract for the private admin inbox (POST /api/admin/applications/search,
+// PATCH /api/admin/applications/:id and POST/DELETE /api/admin/applications/:id/install-link). Shared
+// by the admin UI and the route handlers; keep server-only imports (database, auth, env) out of this file.
 import type { FieldError } from "@/lib/applications/contracts";
 
 export type { FieldError };
@@ -12,12 +12,16 @@ export const ADMIN_SEARCH_ENDPOINT = "/api/admin/applications/search";
 /** Every admin API request must send this header with value "1" (plus JSON content type). */
 export const ADMIN_REQUEST_HEADER = "X-Admin-Request";
 export const ADMIN_INBOX_PATH = "/admin/applications";
+/** POST issues a new private install link for the request (replacing its open one); DELETE revokes it. */
+export const installLinkEndpoint = (id: string) => `${ADMIN_APPLICATIONS_ENDPOINT}/${encodeURIComponent(id)}/install-link`;
 export const ADMIN_LOGIN_PATH = "/admin/login";
 
 export const ADMIN_PAGE_SIZE = 20;
 export const ADMIN_PAGE_SIZE_MAX = 50;
 export const SEARCH_MAX_LENGTH = 100;
 export const NOTE_MAX_LENGTH = 500;
+/** How long a private install link works after it is issued. */
+export const INSTALL_LINK_TTL_HOURS = 72;
 
 export const APPLICATION_STATUSES = ["new", "hold", "contacted"] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
@@ -73,6 +77,10 @@ export type AdminErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  /** Install link: the request's updates are not allowed (as saved). */
+  | "UPDATES_NOT_APPROVED"
+  /** Install link: no installer package is set up yet (or it was withdrawn). */
+  | "NO_INSTALLER"
   | "PAYLOAD_TOO_LARGE"
   | "UNSUPPORTED_MEDIA_TYPE"
   | "UNAVAILABLE"
@@ -84,6 +92,18 @@ export type AdminFieldErrors = Partial<Record<AdminField, FieldError>>;
 export type AdminFailure = { ok: false; code: AdminErrorCode; fieldErrors?: AdminFieldErrors };
 
 export type UpdateResult = { ok: true; item: AdminApplication };
+
+/**
+ * A private install link for one allowed request. The URL is returned once, to the operator who issued
+ * it, and stored only as a hash: hand it to that person privately. It serves Nokka `version` (`build`)
+ * until `expiresAt`, unless it is revoked or replaced, the approval is withdrawn or the package is.
+ */
+export type InstallLink = { url: string; expiresAt: string; build: number; version: string };
+
+/** POST install-link (body `{}`): 201. */
+export type IssueInstallLinkResult = { ok: true; link: InstallLink };
+/** DELETE install-link: `revoked` is 1 when an unexpired link was open, else 0. */
+export type RevokeInstallLinkResult = { ok: true; revoked: number };
 
 // Tab, newline and carriage return are fine in a note; other control characters are not.
 const NOTE_CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;

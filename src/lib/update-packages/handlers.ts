@@ -30,7 +30,7 @@ export type PackageHandlerOptions = {
   getOrigin?: () => string | null;
 };
 
-type Method = "GET" | "HEAD";
+export type Method = "GET" | "HEAD";
 type BuildParams = { params: Promise<{ build: string }> };
 
 const LOG_PREFIX = "[update-packages]";
@@ -100,42 +100,67 @@ export function createPackageHandlers(options: PackageHandlerOptions = {}) {
       }
       if (!info) return failure(method, 404, "NOT_FOUND");
 
-      const etag = `"${info.sha256Hex}"`;
-      const size = info.byteLength;
-      const common = { ...PRIVATE_HEADERS, "Accept-Ranges": "bytes", ETag: etag };
-      if (matchesIfNoneMatch(request.headers.get("if-none-match"), etag)) {
-        return new Response(null, { status: 304, headers: common });
-      }
-
-      const rangeHeader = rangeStillValid(request.headers.get("if-range"), etag)
-        ? request.headers.get("range")
-        : null;
-      // HEAD describes the whole file, as GET without a range would.
-      const requested = method === "HEAD" ? { kind: "full" as const } : parseRange(rangeHeader, size);
-      if (requested.kind === "unsatisfiable") {
-        return failure(method, 416, "RANGE_NOT_SATISFIABLE", { "Content-Range": `bytes */${size}` });
-      }
-      const range = requested.kind === "partial" ? requested.range : { start: 0, end: size - 1 };
-      const headers: Record<string, string> = {
-        ...common,
-        "Content-Type": PACKAGE_CONTENT_TYPE,
-        "Content-Length": String(range.end - range.start + 1),
-      };
-      if (requested.kind === "partial") headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
-      const status = requested.kind === "partial" ? 206 : 200;
-      if (method === "HEAD") return new Response(null, { status, headers });
-
-      // The first chunk is read before the status line is sent, so a database outage is a 503, not a
-      // cut-off 200. Later failures end the stream early; the next request is checked again.
-      let stream: ReadableStream<Uint8Array>;
-      try {
-        stream = await streamRange(store, info, range);
-      } catch (error) {
-        return unavailable(method, "package read failed", error);
-      }
-      return new Response(stream, { status, headers });
+      return respondWithPackage(request, method, store, info, {
+        headers: PRIVATE_HEADERS,
+        refuse: (status, code, extra) => failure(method, status, code, extra),
+        unavailable: (reason, error) => unavailable(method, reason, error),
+      });
     });
   return { GET: handle("GET"), HEAD: handle("HEAD") };
+}
+
+export type PackageResponder = {
+  /** Sent with every answer, including 304, 416 and the bytes. */
+  headers: Record<string, string>;
+  refuse: (status: number, code: PackageErrorCode, extra: Record<string, string>) => Response;
+  unavailable: (reason: string, error?: unknown) => Response;
+  /** Called once a GET is about to send bytes. */
+  onStream?: () => Promise<void>;
+};
+
+/** The whole package or one byte range of it, with validators, after access was checked. */
+export async function respondWithPackage(
+  request: Request,
+  method: Method,
+  store: PackageStore,
+  info: PackageInfo,
+  responder: PackageResponder,
+): Promise<Response> {
+  const etag = `"${info.sha256Hex}"`;
+  const size = info.byteLength;
+  const common = { ...responder.headers, "Accept-Ranges": "bytes", ETag: etag };
+  if (matchesIfNoneMatch(request.headers.get("if-none-match"), etag)) {
+    return new Response(null, { status: 304, headers: common });
+  }
+
+  const rangeHeader = rangeStillValid(request.headers.get("if-range"), etag)
+    ? request.headers.get("range")
+    : null;
+  // HEAD describes the whole file, as GET without a range would.
+  const requested = method === "HEAD" ? { kind: "full" as const } : parseRange(rangeHeader, size);
+  if (requested.kind === "unsatisfiable") {
+    return responder.refuse(416, "RANGE_NOT_SATISFIABLE", { "Content-Range": `bytes */${size}` });
+  }
+  const range = requested.kind === "partial" ? requested.range : { start: 0, end: size - 1 };
+  const headers: Record<string, string> = {
+    ...common,
+    "Content-Type": PACKAGE_CONTENT_TYPE,
+    "Content-Length": String(range.end - range.start + 1),
+  };
+  if (requested.kind === "partial") headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
+  const status = requested.kind === "partial" ? 206 : 200;
+  if (method === "HEAD") return new Response(null, { status, headers });
+
+  // The first chunk is read before the status line is sent, so a database outage is a 503, not a
+  // cut-off 200. Later failures end the stream early; the next request is checked again.
+  let stream: ReadableStream<Uint8Array>;
+  try {
+    stream = await streamRange(store, info, range);
+  } catch (error) {
+    return responder.unavailable("package read failed", error);
+  }
+  await responder.onStream?.();
+  return new Response(stream, { status, headers });
 }
 
 /**
@@ -214,13 +239,13 @@ function withDefaults(options: PackageHandlerOptions): Required<PackageHandlerOp
   return {
     authorize: options.authorize ?? authorizeUpdates,
     getOrigin: options.getOrigin ?? (() => readOrigin(process.env.UPDATES_SIGNING_ORIGIN)),
-    getStore:
-      options.getStore ??
-      (() => {
-        const sql = getDatabase();
-        return sql ? createPackageStore(sql) : null;
-      }),
+    getStore: options.getStore ?? defaultPackageStore,
   };
+}
+
+export function defaultPackageStore(): PackageStore | null {
+  const sql = getDatabase();
+  return sql ? createPackageStore(sql) : null;
 }
 
 /** UPDATES_SIGNING_ORIGIN as an exact http(s) origin, the production origin when unset, else null. */
