@@ -4,6 +4,8 @@ import { github } from "better-auth/social-providers";
 import { Pool } from "pg";
 import { ADMIN_LOGIN_PATH } from "./contracts";
 
+const LOG_PREFIX = "[better-auth]";
+
 export type AuthConfig = {
   secret: string;
   baseURL: string;
@@ -91,7 +93,27 @@ export function createAuth(config: AuthConfig, database: Pool) {
       },
     },
     onAPIError: { errorURL: `${config.baseURL}${ADMIN_LOGIN_PATH}` },
+    logger: { log: logAuthEvent },
   });
+}
+
+/**
+ * Better Auth's log output. Its messages and errors carry request values (`Invalid callbackURL: <url>`,
+ * the `state` of a failed OAuth callback, even one it issued). A message keeps only its text before
+ * the first colon, double quote or control character, where Better Auth's values start; anything
+ * else, including a message that is not a string, is written as its name and code only.
+ */
+function logAuthEvent(level: "debug" | "info" | "warn" | "error", message: unknown, ...args: unknown[]) {
+  const write = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+  const text =
+    typeof message === "string" ? message.split(/[:"\p{Cc}]/u, 1)[0].trimEnd() : describeError(message);
+  write(LOG_PREFIX, text, ...args.map(describeError));
+}
+
+function describeError(error: unknown) {
+  if (!(error instanceof Error)) return { name: typeof error };
+  const code = (error as { code?: unknown }).code;
+  return { name: error.name, code: typeof code === "string" ? code : undefined };
 }
 
 export type Auth = ReturnType<typeof createAuth>;

@@ -21,6 +21,7 @@ const ITEM: AdminApplication = {
   operatorNote: "",
   lastContactedAt: null,
   updatedAt: "2026-11-19T00:00:00.000Z",
+  updatesApproved: false,
 };
 
 function fakeStore(overrides: Partial<AdminApplicationsStore> = {}) {
@@ -239,6 +240,18 @@ describe("PATCH /api/admin/applications/:id", () => {
     expect((await update(store, "7", { operatorNote: note, expectedUpdatedAt: ITEM.updatedAt })).status).toBe(200);
   });
 
+  it.each([true, false])("passes updatesApproved %s alone, without status or note", async (updatesApproved) => {
+    const store = fakeStore();
+    const response = await update(store, "7", { updatesApproved, expectedUpdatedAt: ITEM.updatedAt });
+    expect(response.status).toBe(200);
+    expect(store.update).toHaveBeenCalledExactlyOnceWith("7", {
+      status: undefined,
+      operatorNote: undefined,
+      updatesApproved,
+      expectedUpdatedAt: ITEM.updatedAt,
+    });
+  });
+
   it.each(["0", "-1", "abc", "7.5", "9223372036854775808", "01"])("answers 404 for id %s", async (id) => {
     const store = fakeStore();
     await expectFailure(await update(store, id, { status: "hold", expectedUpdatedAt: ITEM.updatedAt }), 404, {
@@ -254,6 +267,9 @@ describe("PATCH /api/admin/applications/:id", () => {
     ["a client-set contact time", { status: "contacted", lastContactedAt: ITEM.updatedAt, expectedUpdatedAt: ITEM.updatedAt }],
     ["a non-string note", { operatorNote: 5, expectedUpdatedAt: ITEM.updatedAt }],
     ["a null status", { status: null, expectedUpdatedAt: ITEM.updatedAt }],
+    ["a string approval", { updatesApproved: "true", expectedUpdatedAt: ITEM.updatedAt }],
+    ["a null approval", { updatesApproved: null, expectedUpdatedAt: ITEM.updatedAt }],
+    ["an approval without a token", { updatesApproved: true }],
   ])("rejects %s with INVALID_REQUEST", async (_, body) => {
     const store = fakeStore();
     await expectFailure(await update(store, "7", body), 400, { ok: false, code: "INVALID_REQUEST" });

@@ -1,0 +1,22 @@
+{
+  "_comment": "Synthetic test-only P-256 key (never used outside tests). Messages are UTF-8, lines joined by LF, no trailing LF. Signatures are ECDSA P-256/SHA-256 r||s (64 bytes) base64url without padding. Swift: P256.Signing.PublicKey(x963Representation:), ECDSASignature(rawRepresentation:).",
+  "privateKeyD": "bRa-4idimKaXqHcY7QNSYy9-aC_-ktnRJhtTc1BUSPQ",
+  "publicKey": "BAuKQkcrFKupOPAUR2hjcHStjSAJV1kk7_Z9as3WBTU7C4tRC8BhZn0IcQA5_yJfXF_uGmsJOfce4NMkbzjA-R4",
+  "origin": "https://nokka-web.vercel.app",
+  "register": {
+    "challengeId": "5b0e3c1a-8f2d-4b7e-9c4a-1d2e3f405162",
+    "installationId": "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0",
+    "code": "00412345",
+    "message": "nokka-register-v1\nhttps://nokka-web.vercel.app\n5b0e3c1a-8f2d-4b7e-9c4a-1d2e3f405162\n0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0\n00412345",
+    "messageBase64url": "bm9ra2EtcmVnaXN0ZXItdjEKaHR0cHM6Ly9ub2trYS13ZWIudmVyY2VsLmFwcAo1YjBlM2MxYS04ZjJkLTRiN2UtOWM0YS0xZDJlM2Y0MDUxNjIKMGYxZTJkM2MtNGI1YS00OTY4LTg3NzYtYTViNGMzZDJlMWYwCjAwNDEyMzQ1",
+    "signature": "pd0e1LLPXGQCFc4ZqZyRpfUlaaXWqWNvdAw8ekQYeHnrZ8uQdsaM-PcJyTV4pivxpdF0zDFaGCfftU7aojDe9w"
+  },
+  "session": {
+    "installationId": "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0",
+    "issuedAt": 1795622400,
+    "nonce": "p0lXh21Yc7bv6XqPxfSHm7gEBURllLK6-BBPKCLEPWA",
+    "message": "nokka-session-v1\nhttps://nokka-web.vercel.app\n0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0\n1795622400\np0lXh21Yc7bv6XqPxfSHm7gEBURllLK6-BBPKCLEPWA",
+    "messageBase64url": "bm9ra2Etc2Vzc2lvbi12MQpodHRwczovL25va2thLXdlYi52ZXJjZWwuYXBwCjBmMWUyZDNjLTRiNWEtNDk2OC04Nzc2LWE1YjRjM2QyZTFmMAoxNzk1NjIyNDAwCnAwbFhoMjFZYzdidjZYcVB4ZlNIbTdnRUJVUmxsTEs2LUJCUEtDTEVQV0E",
+    "signature": "jMeoM6ICsBzStPKjPMiozVjodNMbacEgw1BpWFjBHa9U_ypk_tGq4o1H0afOHaUGtBKqkrIXx_nmIK_8GbyDzA"
+  }
+}

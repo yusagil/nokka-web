@@ -47,7 +47,8 @@ DATABASE_URL=... npm run db:migrate   # applies db/migrations/*.sql once each
 ```
 
 Applied files are recorded in `schema_migrations` and never run again. Do not edit an applied migration; add a
-new numbered file instead (0001-0003 are applied to the production database).
+new numbered file instead (0001-0003 are applied to the production database). Runners started together, even
+on an empty database, take turns, so each file still runs once.
 
 Run migrations and the server with the same owning role. Row level security is on with no policies, so hosted
 data APIs (for example Supabase's `anon` key) cannot read the list. View the list with the database

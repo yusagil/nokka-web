@@ -15,6 +15,7 @@ const kim: AdminApplication = {
   operatorNote: "",
   lastContactedAt: null,
   updatedAt: "2026-11-19T12:30:00.000Z",
+  updatesApproved: false,
 };
 const lee: AdminApplication = {
   ...kim,

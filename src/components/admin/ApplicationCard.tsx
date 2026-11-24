@@ -55,6 +55,7 @@ export default function ApplicationCard({
   const savedNote = item.operatorNote;
   const [status, setStatus] = useState(item.status);
   const [note, setNote] = useState(savedNote);
+  const [updatesApproved, setUpdatesApproved] = useState(item.updatesApproved);
   const [noteMessage, setNoteMessage] = useState("");
   const [error, setError] = useState<{ text: string; reload?: boolean } | null>(null);
   const [message, setMessage] = useState("");
@@ -70,16 +71,17 @@ export default function ApplicationCard({
     setBase(item.updatedAt);
     setStatus(item.status);
     setNote(savedNote);
+    setUpdatesApproved(item.updatesApproved);
     setNoteMessage("");
     setError(null);
   }
 
-  const dirty = status !== item.status || note !== savedNote;
+  const dirty = status !== item.status || note !== savedNote || updatesApproved !== item.updatesApproved;
   // The draft as of the last render, read when a save returns to see what changed meanwhile.
-  const latest = useRef({ status, note });
+  const latest = useRef({ status, note, updatesApproved });
   useEffect(() => {
-    latest.current = { status, note };
-  }, [status, note]);
+    latest.current = { status, note, updatesApproved };
+  }, [status, note, updatesApproved]);
   useEffect(() => {
     onDirtyChange?.(item.id, dirty);
   }, [onDirtyChange, item.id, dirty]);
@@ -108,10 +110,11 @@ export default function ApplicationCard({
     pending.current = true;
     setSaving(true);
     setNoteMessage("");
-    const sent = { status, note };
+    const sent = { status, note, updatesApproved };
     const patch: ApplicationPatch = { expectedUpdatedAt: item.updatedAt };
     if (status !== item.status) patch.status = status;
     if (note !== savedNote) patch.operatorNote = note;
+    if (updatesApproved !== item.updatesApproved) patch.updatesApproved = updatesApproved;
     const result = await updateApplication(item.id, patch);
     pending.current = false;
     setSaving(false);
@@ -121,11 +124,14 @@ export default function ApplicationCard({
       // Fields edited while the request was in flight keep the newer draft, left unsaved.
       const statusEdited = latest.current.status !== sent.status;
       const noteEdited = latest.current.note !== sent.note;
+      const updatesEdited = latest.current.updatesApproved !== sent.updatesApproved;
+      const edited = statusEdited || noteEdited || updatesEdited;
       setBase(result.item.updatedAt);
       if (!statusEdited) setStatus(result.item.status);
       if (!noteEdited) setNote(result.item.operatorNote);
-      setMessage(statusEdited || noteEdited ? copy.savedWithPending : copy.saved);
-      onSaved(result.item, statusEdited || noteEdited);
+      if (!updatesEdited) setUpdatesApproved(result.item.updatesApproved);
+      setMessage(edited ? copy.savedWithPending : copy.saved);
+      onSaved(result.item, edited);
       return;
     }
     switch (result.code) {
@@ -182,7 +188,14 @@ export default function ApplicationCard({
           </p>
         </div>
         <div className="flex items-center justify-between gap-3 sm:shrink-0 sm:justify-end">
-          <StatusBadge status={item.status} />
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={item.status} />
+            {item.updatesApproved && (
+              <span className="inline-flex items-center rounded-full bg-ok/10 px-2.5 py-1 text-xs font-medium text-ok">
+                {copy.updatesApprovedBadge}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             aria-expanded={expanded}
@@ -224,6 +237,23 @@ export default function ApplicationCard({
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="text-sm font-medium text-fg">{copy.updatesLegend}</legend>
+          <label className="mt-2 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line px-4 text-sm text-fg-muted has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-fg has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent">
+            <input
+              type="checkbox"
+              checked={updatesApproved}
+              onChange={(e) => setUpdatesApproved(e.target.checked)}
+              aria-describedby={`${id}-updates-hint`}
+              className="accent-accent focus-visible:outline-none"
+            />
+            {copy.updatesLabel}
+          </label>
+          <p id={`${id}-updates-hint`} className="mt-1 text-sm text-fg-subtle">
+            {item.updatesApproved && !updatesApproved ? copy.updatesRevokeWarning : copy.updatesHint}
+          </p>
         </fieldset>
 
         <div>

@@ -48,6 +48,13 @@ export const copy = {
   saved: "저장했습니다.",
   savedWithPending: "저장했습니다. 저장하는 동안 바꾼 내용은 아직 저장되지 않았습니다.",
   movedOut: (status: string) => `저장했습니다. ${status} 상태가 되어 지금 목록에서 뺐습니다.`,
+  updatesLegend: "앱 업데이트",
+  updatesLabel: "업데이트 허용",
+  updatesHint:
+    "켜면 이 이메일로 앱에서 등록 코드를 받아 Mac 한 대를 등록할 수 있습니다. 켜는 것만으로 메일이 가지는 않습니다.",
+  updatesRevokeWarning:
+    "끄고 저장하면 등록된 Mac의 업데이트와 아직 쓰지 않은 코드가 바로 중단됩니다. 다시 켜도 새 코드로 다시 등록해야 합니다.",
+  updatesApprovedBadge: "업데이트 허용",
   noChanges: "바뀐 내용이 없습니다.",
   saveFailed: "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   conflict:

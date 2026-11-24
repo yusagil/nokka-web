@@ -22,13 +22,24 @@ export type DigestMailer = {
   authorize(): Promise<MailAuthorization>;
 };
 
-export type GmailMailerOptions = {
+/** Like MailAuthorization, but each send names its recipient (one provider request per send). */
+export type SenderAuthorization =
+  | { ok: true; send(to: string, mail: DigestMail): Promise<SendResult> }
+  | { ok: false; code: string };
+
+export type MailSender = {
+  /** Gets permission to send (it never sends). Never throws: failures come back as `{ ok: false }`. */
+  authorize(): Promise<SenderAuthorization>;
+};
+
+export type GmailMailerOptions = GmailSenderOptions & { to: string };
+
+export type GmailSenderOptions = {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
   /** The connected Gmail address. */
   from: string;
-  to: string;
   fetch?: typeof fetch;
   /** Waits before each extra token request after a transient error; sends are never retried here. */
   tokenRetryDelaysMs?: readonly number[];
@@ -42,21 +53,32 @@ export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 const MESSAGE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const ERROR_NAME = /^[A-Za-z_]{1,64}$/;
 
+/** The digest mailer: a Gmail sender whose every mail goes to the one fixed recipient `to`. */
+export function createGmailMailer({ to, ...options }: GmailMailerOptions): DigestMailer {
+  const sender = createGmailSender(options);
+  return {
+    async authorize() {
+      const access = await sender.authorize();
+      if (!access.ok) return access;
+      return { ok: true, send: (mail) => access.send(to, mail) };
+    },
+  };
+}
+
 /**
  * Gmail API users.messages.send with an offline refresh token (scope gmail.send; this code never
  * reads mail). The access token is fetched per call and kept in memory only.
  */
-export function createGmailMailer({
+export function createGmailSender({
   clientId,
   clientSecret,
   refreshToken,
   from,
-  to,
   fetch: fetchImpl = fetch,
   tokenRetryDelaysMs = [1000, 3000],
   sleep = defaultSleep,
   timeoutMs = 10_000,
-}: GmailMailerOptions): DigestMailer {
+}: GmailSenderOptions): MailSender {
   async function requestToken(): Promise<{ token: string } | { code: string; transient: boolean }> {
     let response: Response;
     let body: unknown;
@@ -93,7 +115,7 @@ export function createGmailMailer({
     return { code, transient: response.status >= 500 || response.status === 429 };
   }
 
-  async function send(token: string, mail: DigestMail): Promise<SendResult> {
+  async function send(token: string, to: string, mail: DigestMail): Promise<SendResult> {
     let response: Response;
     let body: unknown;
     try {
@@ -132,7 +154,7 @@ export function createGmailMailer({
       }
       if (!("token" in result)) return { ok: false, code: result.code };
       const { token } = result;
-      return { ok: true, send: (mail) => send(token, mail) };
+      return { ok: true, send: (to, mail) => send(token, to, mail) };
     },
   };
 }

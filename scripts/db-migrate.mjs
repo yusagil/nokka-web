@@ -9,12 +9,17 @@ const MIGRATIONS_DIR = fileURLToPath(new URL("../db/migrations/", import.meta.ur
 
 /** Returns the names of the migrations applied by this call. */
 export async function applyMigrations(sql, dir = MIGRATIONS_DIR) {
-  await sql`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      name text PRIMARY KEY,
-      applied_at timestamptz NOT NULL DEFAULT now()
-    )
-  `;
+  await sql.begin(async (tx) => {
+    // IF NOT EXISTS alone races on an empty database: runners started together all try to create the
+    // table and the losers fail with 23505. The lock (released at commit) lets one create it first.
+    await tx`SELECT pg_advisory_xact_lock(hashtext('nokka-web schema_migrations'))`;
+    await tx`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        name text PRIMARY KEY,
+        applied_at timestamptz NOT NULL DEFAULT now()
+      )
+    `;
+  });
   const files = (await readdir(dir)).filter((file) => file.endsWith(".sql")).sort();
   const applied = [];
   for (const name of files) {

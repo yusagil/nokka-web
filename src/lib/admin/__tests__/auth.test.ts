@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { inspect } from "node:util";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { createAuth, readAuthConfig, type AuthConfig } from "../better-auth";
@@ -97,5 +98,37 @@ describe("Better Auth gates", () => {
     expect(Object.keys(auth.options.socialProviders)).toEqual(["github"]);
     expect(auth.options.emailAndPassword.enabled).toBe(false);
     expect(auth.options.account.accountLinking.enabled).toBe(false);
+  });
+
+  it("logs Better Auth's messages and errors without the request values they carry", () => {
+    const value = "qa-value-0123456789abcdef";
+    // The shape Better Auth logs when an OAuth callback's state is unknown or unbound.
+    const stateError = Object.assign(new Error("State mismatch: verification not found"), {
+      name: "BetterAuthError",
+      code: "state_mismatch",
+      details: { state: value },
+    });
+    const log = auth.options.logger.log;
+    const error = vi.mocked(console.error);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    log("error", "Failed to parse state", stateError);
+    log("warn", "OAuth provider not found", { providerId: value });
+    log("error", `Invalid callbackURL: https://example.com/?q=${value}`);
+    log("error", `Provider "${value}" did not return an email`);
+    log("warn", `Invalid origin\n2026-11-24T00:00:00.000Z ERROR [better-auth]: ${value}`);
+    log("error", stateError);
+
+    expect(error.mock.calls).toEqual([
+      ["[better-auth]", "Failed to parse state", { name: "BetterAuthError", code: "state_mismatch" }],
+      ["[better-auth]", "Invalid callbackURL"],
+      ["[better-auth]", "Provider"],
+      ["[better-auth]", { name: "BetterAuthError", code: "state_mismatch" }],
+    ]);
+    expect(warn.mock.calls).toEqual([
+      ["[better-auth]", "OAuth provider not found", { name: "object" }],
+      ["[better-auth]", "Invalid origin"],
+    ]);
+    expect(inspect([error.mock.calls, warn.mock.calls], { depth: null })).not.toContain(value);
   });
 });
