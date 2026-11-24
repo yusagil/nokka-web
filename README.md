@@ -65,7 +65,7 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
 ## Admin inbox
 
 `/admin/applications` is a Korean-only, private inbox for the request list: search, status
-(`new`/`hold`/`contacted`), a short note, and a mail draft link. Only one GitHub account gets in.
+(`new`/`hold`/`contacted`), a short note, and mail draft links. Only one GitHub account gets in.
 
 - Sign-in: Better Auth (`better-auth`, GitHub OAuth, sessions in Postgres). `src/lib/admin/better-auth.ts`
   turns away any GitHub id other than `ADMIN_GITHUB_USER_ID` before a user row is written. It also refuses
@@ -77,6 +77,17 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
   admin session, `Origin` equal to `BETTER_AUTH_URL`, JSON, and `X-Admin-Request: 1`. Saves compare
   `updatedAt` and answer 409 when the row changed in between. Only a change to `contacted` records
   `lastContactedAt`. A repeated public request for the same email changes nothing.
+- Mail drafts: each draft opens from two links with the same recipient and subject. `Gmail로 …` opens Gmail's
+  web compose window (`https://mail.google.com/mail/?view=cm&fs=1&to=…&su=…`) in a new tab of the same browser, in
+  the Google account signed in there by default, so it needs no mail app and the admin page stays open.
+  `메일 앱으로 …` is a `mailto:` link: it works only when the browser or macOS passes it to a mail app, and the
+  page can't tell when nothing takes it. Neither sends anything. The request draft also fills its short body. The
+  install-link draft never puts the link in an address (no `body` in either link), so it stays out of mailto:
+  handlers, Gmail's request and the browser's history: `메일 본문 복사` copies the body with the link and its expiry
+  to paste in. When the clipboard refuses it, the whole body appears in a read-only field, selected to copy by hand.
+  Both copy buttons do nothing while a new link or a revoke is under way, and while an earlier copy is still being
+  written (clipboard writes can finish out of order, so an old link's could land last). A copy that ends after a
+  request began reports nothing, and a new link says that anything copied with the old one no longer works.
 - Setup: run `npm run db:migrate` (0002 adds the inbox columns and the `auth_*` tables). Then set the
   settings listed in `.env.example`. Register one GitHub OAuth App per environment with callback
   `{BETTER_AUTH_URL}/api/auth/callback/github`.
@@ -87,8 +98,9 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
 
 A person whose updates are allowed can get a full installer without any public download. In the admin inbox,
 an allowed request's card has `비공개 설치 링크`: `설치 링크 만들기` issues a link valid for 72 hours
-(`INSTALL_LINK_TTL_HOURS`), shows its address once, and opens a mail draft to the stored email
-(`링크 메일 작성`, sent by the operator). Nothing is mailed automatically.
+(`INSTALL_LINK_TTL_HOURS`) and shows its address once. `메일 본문 복사` copies the mail's body with the link, and
+`Gmail로 링크 메일 작성` or `메일 앱으로 링크 메일 작성` opens a draft to the stored email with only the recipient and
+subject, for the operator to paste the body in and send. Nothing is mailed automatically.
 
 - Address: `https://nokka-web.vercel.app/install#<token>`. The secret is in the fragment, which browsers never send,
   so it is never in a request path, query string or referrer: the request fields that hosting logs (Vercel Runtime

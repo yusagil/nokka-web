@@ -12,7 +12,7 @@ import {
 } from "@/lib/admin/contracts";
 import { updateApplication } from "./api";
 import { STATUS_LABEL, copy } from "./copy";
-import { composeMailto, formatDateTime } from "./format";
+import { composeGmail, composeMailto, formatDateTime } from "./format";
 import InstallLinkPanel from "./InstallLinkPanel";
 
 interface ApplicationCardProps {
@@ -317,6 +317,15 @@ export default function ApplicationCard({
           >
             {saving ? copy.saving : copy.save}
           </button>
+          <a
+            href={composeGmail(item.name, item.email)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-describedby={`${id}-compose-hint`}
+            className="inline-flex h-11 items-center justify-center rounded-full border border-line px-6 text-sm font-medium text-fg transition-colors duration-100 hover:bg-surface-2"
+          >
+            {copy.composeGmail}
+          </a>
           <a
             href={composeMailto(item.name, item.email)}
             aria-describedby={`${id}-compose-hint`}

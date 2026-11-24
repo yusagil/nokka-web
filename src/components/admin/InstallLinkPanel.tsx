@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { INSTALL_LINK_TTL_HOURS, type AdminApplication, type InstallLink } from "@/lib/admin/contracts";
 import { issueInstallLink, revokeInstallLink, type ClientFailure } from "./api";
 import { copy } from "./copy";
-import { composeInstallLinkMailto, formatDateTime } from "./format";
+import { composeInstallLinkGmail, composeInstallLinkMailto, formatDateTime, installLinkMailBody } from "./format";
 
 interface InstallLinkPanelProps {
   /** A request whose updates are allowed as saved. */
@@ -43,18 +43,33 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
   const [error, setError] = useState("");
   // A ref, not state, so a second press before the next render can't send a second request.
   const pending = useRef(false);
+  // Bumped as each request starts, so a copy that ends after it says nothing about a link that may be gone.
+  const generation = useRef(0);
+  // One clipboard write at a time. Writes run side by side and can finish in any order, so a slow one
+  // for an old link could land after, and over, the copy of a newer one. Each write still starts in its
+  // own click, where browsers allow it.
+  const writing = useRef(false);
+  const [copying, setCopying] = useState(false);
   const urlInput = useRef<HTMLInputElement>(null);
+  // The whole draft to select by hand, shown only once the clipboard refused it.
+  const [bodyShown, setBodyShown] = useState(false);
+  const bodyInput = useRef<HTMLTextAreaElement>(null);
 
   async function run(kind: "issue" | "revoke") {
     if (pending.current) return;
     pending.current = true;
+    generation.current += 1;
+    const replacing = link !== null;
     setBusy(kind);
     setMessage("");
     setError("");
+    setBodyShown(false);
     if (kind === "issue") {
       const result = await issueInstallLink(item.id);
       if (result.ok) {
         setLink(result.link);
+        // The old link is blocked now, and so is anything copied with it.
+        if (replacing) setMessage(copy.installLinkReissued);
         // Focus the address so it can be copied right away.
         requestAnimationFrame(() => urlInput.current?.select());
       } else {
@@ -73,15 +88,39 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
     setBusy(null);
   }
 
-  async function copyLink() {
-    if (!link) return;
+  async function copyText(text: string, copied: string, failed: () => void) {
+    const started = generation.current;
+    writing.current = true;
+    setCopying(true);
     try {
-      await navigator.clipboard.writeText(link.url);
-      setMessage(copy.installLinkCopied);
+      await navigator.clipboard.writeText(text);
+      if (generation.current === started) setMessage(copied);
     } catch {
+      if (generation.current === started) failed();
+    } finally {
+      writing.current = false;
+      setCopying(false);
+    }
+  }
+
+  // No copying while a request runs (the link shown may be replaced or revoked by it) or while an
+  // earlier copy is still being written.
+  function copyLink() {
+    if (!link || pending.current || writing.current) return;
+    void copyText(link.url, copy.installLinkCopied, () => {
       setMessage(copy.installLinkCopyFailed);
       urlInput.current?.select();
-    }
+    });
+  }
+
+  // The link goes into a draft only by pasting: the compose links carry the recipient and subject.
+  function copyBody() {
+    if (!link || pending.current || writing.current) return;
+    void copyText(installLinkMailBody(item.name, link.url, link.expiresAt), copy.installLinkBodyCopied, () => {
+      setMessage(copy.installLinkBodyCopyFailed);
+      setBodyShown(true);
+      requestAnimationFrame(() => bodyInput.current?.select());
+    });
   }
 
   return (
@@ -110,11 +149,48 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
             {copy.installLinkSummary(link.version, link.build, formatDateTime(link.expiresAt))}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button type="button" onClick={copyLink} className={BUTTON}>
+            <button type="button" onClick={copyLink} aria-disabled={busy !== null || copying} className={BUTTON}>
               {copy.installLinkCopy}
             </button>
+            <button
+              type="button"
+              onClick={copyBody}
+              aria-disabled={busy !== null || copying}
+              aria-describedby={`${id}-compose-hint`}
+              className={BUTTON}
+            >
+              {copy.installLinkCopyBody}
+            </button>
+          </div>
+          {bodyShown && (
+            <div className="space-y-2">
+              <label htmlFor={`${id}-body`} className="text-sm font-medium text-fg">
+                {copy.installLinkBodyLabel}
+              </label>
+              <textarea
+                ref={bodyInput}
+                id={`${id}-body`}
+                readOnly
+                rows={8}
+                value={installLinkMailBody(item.name, link.url, link.expiresAt)}
+                onFocus={(e) => e.currentTarget.select()}
+                className="w-full resize-y rounded-[10px] border border-line bg-bg px-4 py-3 text-sm leading-relaxed text-fg"
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* A new tab, so this page and the address it shows stay open. */}
             <a
-              href={composeInstallLinkMailto(item.name, item.email, link.url, link.expiresAt)}
+              href={composeInstallLinkGmail(item.email)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-describedby={`${id}-compose-hint`}
+              className={BUTTON}
+            >
+              {copy.installLinkComposeGmail}
+            </a>
+            <a
+              href={composeInstallLinkMailto(item.email)}
               aria-describedby={`${id}-compose-hint`}
               className={BUTTON}
             >

@@ -253,6 +253,11 @@ describe("ApplicationCard", () => {
     const compose = screen.getByRole("link", { name: copy.compose });
     expect(compose.getAttribute("href")).toMatch(/^mailto:kim@example\.com\?subject=/);
     expect(compose).toHaveAccessibleDescription(copy.composeHint);
+    const gmail = screen.getByRole("link", { name: copy.composeGmail });
+    expect(gmail.getAttribute("href")).toMatch(/^https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=kim%40example\.com&su=/);
+    expect(gmail).toHaveAttribute("target", "_blank");
+    expect(gmail).toHaveAttribute("rel", "noopener noreferrer");
+    expect(gmail).toHaveAccessibleDescription(copy.composeHint);
     expect(screen.getByRole("radio", { name: "신규" })).toBeChecked();
     expect(fetchMock).not.toHaveBeenCalled();
   });

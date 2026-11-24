@@ -24,13 +24,49 @@ export function composeMailto(name: string, email: string): string {
   return mailto(email, copy.mailSubject, copy.mailBody(name));
 }
 
-/** The same kind of draft, carrying a private install link and its expiry (Seoul time). */
-export function composeInstallLinkMailto(name: string, email: string, url: string, expiresAt: string): string {
-  return mailto(email, copy.installLinkMailSubject, copy.installLinkMailBody(name, url, formatDateTime(expiresAt)));
+/**
+ * The draft from `composeMailto` in Gmail's web compose window. A mailto: link only works when the
+ * browser or the system passes it to a mail app, and the page can't tell when nothing takes it; this
+ * opens in a new tab of the same browser instead. It too only opens a draft.
+ */
+export function composeGmail(name: string, email: string): string {
+  return gmail(email, copy.mailSubject, copy.mailBody(name));
 }
 
-function mailto(email: string, subject: string, body: string): string {
+/**
+ * The install-link mail's body: the private link and its expiry (Seoul time). It is copied, never put
+ * in a URL, so the link stays out of mailto: handlers, Gmail's request and the browser's history.
+ */
+export function installLinkMailBody(name: string, url: string, expiresAt: string): string {
+  return copy.installLinkMailBody(name, url, formatDateTime(expiresAt));
+}
+
+/** A mail-app draft for the install-link mail: recipient and subject only; the copied body is pasted in. */
+export function composeInstallLinkMailto(email: string): string {
+  return mailto(email, copy.installLinkMailSubject);
+}
+
+/** The same draft as `composeInstallLinkMailto` in Gmail's web compose window. */
+export function composeInstallLinkGmail(email: string): string {
+  return gmail(email, copy.installLinkMailSubject);
+}
+
+function mailto(email: string, subject: string, body?: string): string {
   // Keep "@" readable for mail apps but encode anything that would break the URL (?, &, #, %).
   const to = encodeURIComponent(email).replace(/%40/g, "@");
-  return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const draft = `mailto:${to}?subject=${encodeURIComponent(subject)}`;
+  return body === undefined ? draft : `${draft}&body=${encodeURIComponent(body)}`;
+}
+
+function gmail(email: string, subject: string, body?: string): string {
+  // view=cm opens the compose window, fs=1 full size; Gmail fills To, Subject (su) and the body.
+  // encodeURIComponent, not URLSearchParams: a space stays %20 rather than "+".
+  const fields = [
+    ["view", "cm"],
+    ["fs", "1"],
+    ["to", email],
+    ["su", subject],
+    ...(body === undefined ? [] : [["body", body]]),
+  ];
+  return `https://mail.google.com/mail/?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
 }
