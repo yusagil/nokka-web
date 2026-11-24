@@ -7,6 +7,12 @@ import { newAccessToken, sha256 } from "@/lib/updates/registration/crypto";
 import { getAuth } from "./better-auth";
 import { createAdminApplicationsStore, type AdminApplicationsStore, type SearchCursor } from "./applications-store";
 import {
+  getConfiguredApprovalMailServices,
+  runApprovalMail,
+  sendApprovalMail,
+  type ApprovalMailServices,
+} from "./approval-mail";
+import {
   ADMIN_PAGE_SIZE,
   ADMIN_PAGE_SIZE_MAX,
   ADMIN_REQUEST_HEADER,
@@ -17,7 +23,9 @@ import {
   type AdminErrorCode,
   type AdminFailure,
   type AdminFieldErrors,
+  type AdminApplication,
   type ApplicationStatus,
+  type ApprovalMailResult,
   type IssueInstallLinkResult,
   type RevokeInstallLinkResult,
   type SearchResult,
@@ -32,6 +40,8 @@ export type AdminHandlerOptions = {
   getStore?: () => AdminApplicationsStore | null;
   /** The one origin allowed to call the admin API (BETTER_AUTH_URL), or null when unconfigured. */
   getAllowedOrigin?: () => string | null;
+  /** The approval mail's store, sender and link origin; null when the database is not configured. */
+  getApprovalMail?: () => ApprovalMailServices | null;
 };
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -89,7 +99,11 @@ export function createSearchHandler(options: AdminHandlerOptions = {}) {
   });
 }
 
-/** PATCH /api/admin/applications/:id */
+/**
+ * PATCH /api/admin/applications/:id. A save that turns updates on stores one approval mail with the change and
+ * sends it after the commit, before answering: the answer's `approvalMail` says how it went. A failed or
+ * uncertain mail never undoes the approval; the operator sends it again from the card.
+ */
 export function createUpdateHandler(options: AdminHandlerOptions = {}) {
   const deps = withDefaults(options);
   return withErrorBoundary(
@@ -137,13 +151,85 @@ export function createUpdateHandler(options: AdminHandlerOptions = {}) {
       }
       if (outcome.kind === "not_found") return failure(404, "NOT_FOUND");
       if (outcome.kind === "conflict") return failure(409, "CONFLICT");
-      const result: UpdateResult = { ok: true, item: outcome.item };
+      let item = outcome.item;
+      if (outcome.approvalMailId) {
+        // Without the services the mail stays stored; the recovery run or the operator sends it.
+        const mail = deps.getApprovalMail();
+        if (mail) {
+          await sendApprovalMail(outcome.approvalMailId, mail);
+          item = await reread(store, id, item);
+        }
+      }
+      const result: UpdateResult = { ok: true, item };
       return respond(200, result);
     },
   );
 }
 
-export type InstallLinkHandlerOptions = Pick<AdminHandlerOptions, "getAdminSession" | "getAllowedOrigin"> & {
+/**
+ * POST /api/admin/applications/:id/approval-mail with `{ expectedMailId, intent }` (see ApprovalMailRequest).
+ * `send` sends a mail that never went out; `resend` follows a finished mail with a new one (and a new link that
+ * closes the previous one). 409 `CONFLICT` when the card is out of date (the latest mail is another one, or in a
+ * state its intent does not fit: a second press, another tab, a repeated request or the recovery run),
+ * `MAIL_IN_PROGRESS` while one is being sent, `UPDATES_NOT_APPROVED` when updates are not allowed as saved.
+ * Answers with the request as stored after the attempt.
+ */
+export function createApprovalMailHandler(options: AdminHandlerOptions = {}) {
+  const deps = withDefaults(options);
+  return withErrorBoundary(async (request: Request, context: { params: Promise<{ id: string }> }) => {
+    const rejected = await guard(request, deps);
+    if (rejected) return rejected;
+    const { id } = await context.params;
+    if (!isBigintId(id)) return failure(404, "NOT_FOUND");
+
+    const body = await readJsonBody(request, MAX_BODY_BYTES);
+    if (!body.ok) return body.reason === "TOO_LARGE" ? failure(413, "PAYLOAD_TOO_LARGE") : failure(400, "INVALID_REQUEST");
+    const fields = asObjectWithKeys(body.value, ["expectedMailId", "intent"]);
+    if (!fields || !("expectedMailId" in fields)) return failure(400, "INVALID_REQUEST");
+    const { expectedMailId, intent } = fields;
+    if (expectedMailId !== null && (typeof expectedMailId !== "string" || !isBigintId(expectedMailId))) {
+      return failure(400, "INVALID_REQUEST");
+    }
+    if (intent !== "send" && intent !== "resend") return failure(400, "INVALID_REQUEST");
+
+    const store = deps.getStore();
+    const mail = deps.getApprovalMail();
+    if (!store || !mail) return unavailable("database is not configured");
+    let outcome;
+    try {
+      outcome = await mail.store.request(id, expectedMailId, intent);
+    } catch (error) {
+      return unavailable("approval mail request failed", error);
+    }
+    if (outcome.kind === "not_found") return failure(404, "NOT_FOUND");
+    if (outcome.kind === "not_approved") return failure(409, "UPDATES_NOT_APPROVED");
+    if (outcome.kind === "conflict") return failure(409, "CONFLICT");
+    if (outcome.kind === "in_progress") return failure(409, "MAIL_IN_PROGRESS");
+
+    await runApprovalMail(outcome.claim, mail);
+    let item: AdminApplication | null;
+    try {
+      item = await store.get(id);
+    } catch (error) {
+      return unavailable("approval mail result lookup failed", error);
+    }
+    if (!item) return failure(404, "NOT_FOUND");
+    const result: ApprovalMailResult = { ok: true, item };
+    return respond(200, result);
+  });
+}
+
+/** The request as stored now, or `fallback` when it can not be read (the save itself is committed). */
+async function reread(store: AdminApplicationsStore, id: string, fallback: AdminApplication) {
+  try {
+    return (await store.get(id)) ?? fallback;
+  } catch (error) {
+    console.error(LOG_PREFIX, "saved request was not read again", describeError(error));
+    return fallback;
+  }
+}
+
+export type InstallLinkHandlerOptions = Pick<AdminHandlerOptions, "getAdminSession" | "getAllowedOrigin" | "getStore"> & {
   /** Null when the database is not configured; the API then answers 503. */
   getLinkStore?: () => InstallLinkStore | null;
   /** The link's secret: 32 random bytes, base64url. */
@@ -166,8 +252,23 @@ export function createInstallLinkHandlers(options: InstallLinkHandlerOptions = {
         return sql ? createInstallLinkStore(sql) : null;
       }),
     newToken: options.newToken ?? newAccessToken,
+    // The request is read back from the links' own database: the default one, or none when only a link store
+    // is given (tests), so an answer never mixes two databases.
+    getStore: options.getStore ?? (options.getLinkStore ? () => null : withDefaults(options).getStore),
   };
   type Context = { params: Promise<{ id: string }> };
+  /** The request as stored now, for the card (a link made or revoked here cancels an unsent approval mail). */
+  const current = async (id: string) => {
+    const store = deps.getStore();
+    if (!store) return {};
+    try {
+      const item = await store.get(id);
+      return item ? { item } : {};
+    } catch (error) {
+      console.error(LOG_PREFIX, "request was not read after the link change", describeError(error));
+      return {};
+    }
+  };
 
   const POST = withErrorBoundary(async (request: Request, context: Context) => {
     const rejected = await guard(request, deps);
@@ -195,6 +296,7 @@ export function createInstallLinkHandlers(options: InstallLinkHandlerOptions = {
     const result: IssueInstallLinkResult = {
       ok: true,
       link: { url: installLinkUrl(origin, token), ...outcome.link },
+      ...(await current(id)),
     };
     return respond(201, result);
   });
@@ -214,7 +316,7 @@ export function createInstallLinkHandlers(options: InstallLinkHandlerOptions = {
       return unavailable("install link revoke failed", error);
     }
     if (outcome.kind === "not_found") return failure(404, "NOT_FOUND");
-    const result: RevokeInstallLinkResult = { ok: true, revoked: outcome.revoked };
+    const result: RevokeInstallLinkResult = { ok: true, revoked: outcome.revoked, ...(await current(id)) };
     return respond(200, result);
   });
 
@@ -233,6 +335,7 @@ function withDefaults(options: AdminHandlerOptions): Deps {
         return sql ? createAdminApplicationsStore(sql) : null;
       }),
     getAllowedOrigin: options.getAllowedOrigin ?? (() => getAuth()?.config.baseURL ?? null),
+    getApprovalMail: options.getApprovalMail ?? getConfiguredApprovalMailServices,
   };
 }
 
@@ -319,7 +422,7 @@ function failure(status: number, code: AdminErrorCode, fieldErrors?: AdminFieldE
 
 function respond(
   status: number,
-  body: SearchResult | UpdateResult | IssueInstallLinkResult | RevokeInstallLinkResult | AdminFailure,
+  body: SearchResult | UpdateResult | ApprovalMailResult | IssueInstallLinkResult | RevokeInstallLinkResult | AdminFailure,
 ) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }

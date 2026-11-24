@@ -65,18 +65,24 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
 ## Admin inbox
 
 `/admin/applications` is a Korean-only, private inbox for the request list: search, status
-(`new`/`hold`/`contacted`), a short note, and mail draft links. Only one GitHub account gets in.
+(`new`/`hold`/`contacted`), a short note, update approval, and mail draft links. Only one GitHub account gets in.
+An opened card also shows where the request stands after the approval, each read separately: the latest approval
+mail (see below), whether a Mac is registered for updates (never which one), and the latest one-time code mail the
+app asked for (when, and how the mail service answered; never the code). `contacted` stays the operator's own
+record and is never set by a mail.
 
 - Sign-in: Better Auth (`better-auth`, GitHub OAuth, sessions in Postgres). `src/lib/admin/better-auth.ts`
   turns away any GitHub id other than `ADMIN_GITHUB_USER_ID` before a user row is written. It also refuses
   sessions for anyone else. `getAdminSession()` in `src/lib/admin/session.ts` checks the session and
   linked GitHub id again on every page load (`src/app/admin/applications/layout.tsx`) and API call.
   Missing settings fail closed: login and the API answer 503.
-- API: `POST /api/admin/applications/search` (search terms stay out of URLs and logs) and
-  `PATCH /api/admin/applications/:id`. The contract is in `src/lib/admin/contracts.ts`. Requests need the
-  admin session, `Origin` equal to `BETTER_AUTH_URL`, JSON, and `X-Admin-Request: 1`. Saves compare
-  `updatedAt` and answer 409 when the row changed in between. Only a change to `contacted` records
-  `lastContactedAt`. A repeated public request for the same email changes nothing.
+- API: `POST /api/admin/applications/search` (search terms stay out of URLs and logs),
+  `PATCH /api/admin/applications/:id` and `POST /api/admin/applications/:id/approval-mail`. The contract is in
+  `src/lib/admin/contracts.ts`. Requests need the admin session, `Origin` equal to `BETTER_AUTH_URL`, JSON, and
+  `X-Admin-Request: 1`. Saves compare `updatedAt` and answer 409 when the row changed in between. Only a change to
+  `contacted` records `lastContactedAt`. A repeated public request for the same email changes nothing.
+- Withdrawing the approval (saving it off) ends the registered Mac's updates, every unused code, the open install
+  link and an approval mail not yet handed to the mail service, in one transaction. The card says so before saving.
 - Mail drafts: each draft opens from two links with the same recipient and subject. `Gmail로 …` opens Gmail's
   web compose window (`https://mail.google.com/mail/?view=cm&fs=1&to=…&su=…`) in a new tab of the same browser, in
   the Google account signed in there by default, so it needs no mail app and the admin page stays open.
@@ -94,13 +100,74 @@ APPLICATIONS_TEST_DATABASE_URL=postgres://... npm run test:run
 - Tests: `src/lib/admin/__tests__/admin.integration.test.ts` runs with `APPLICATIONS_TEST_DATABASE_URL`, like
   the other integration tests. It covers paging, search, saves and real Better Auth session checks.
 
+## Approval mail
+
+Saving `업데이트 허용` on (off → on) sends the person one mail with a new private install link (see below) and the
+steps after it: press `설치 파일 받기` once on the Mac to install, then request the 8-digit code in the app's
+registration screen. The code itself is still mailed only when the app asks for it; people who already have Nokka
+start at that step. Korean first, English below, sent with the Gmail API from `UPDATE_CODE_MAIL_FROM` to the
+request's stored email (`src/lib/notifications/approval-mail.ts`).
+
+- One mail per approval: the save stores one row in `approval_mails` in the same transaction as the change (unique
+  per request and approval generation). Saving the same value again, a note, a 409 retry or two saves at once
+  store none. Requests allowed before migration 0009 get no mail until the operator sends one.
+- Sending (`src/lib/admin/approval-mail{,-store}.ts`): after the commit, the save claims the row and makes one
+  attempt before answering, so the card shows the result at once. An attempt gets mail access first, then, holding
+  the request row, checks that it still owns the request's latest mail and that updates are still allowed, and
+  issues the link (replacing the open one). It records and commits that it is about to ask the mail service, then
+  makes the one request and records the answer for its own attempt only (a stalled attempt can not write over a
+  newer one). The link's token is only in that attempt's memory and in the mail; the database keeps its SHA-256.
+- Results, shown on the card: `accepted` (the mail service took it, not proof of delivery), `rejected` (nothing
+  sent; its link is closed), `uncertain` (no answer, or the answer was never recorded: it may have been sent),
+  `failed` (stopped before asking: no installer, the installer withdrawn after the link was made, mail not
+  configured, mail access refused; nothing sent, the approval stays), `cancelled` (the approval was withdrawn, the
+  link revoked or replaced by a link made by hand before it was sent) and, derived after two minutes,
+  `interrupted` (never asked: claimed or stored and then left). Right before asking, the attempt checks again,
+  holding the request and channel rows, that the approval, its link and the link's package still stand.
+- Never sent twice by itself: Gmail has no idempotency key, so a mail whose start was recorded is never asked for
+  again automatically. The daily recovery run (`GET /api/cron/approval-mails`, 00:30 UTC, `CRON_SECRET`) only sends
+  mails that never reached that point. It claims them one at a time and only while one more attempt (two Gmail
+  requests of at most 8 seconds each, plus the database) fits in 50 of its 60 seconds, so the rest stay claimable
+  by the next run or the operator. An attempt that waited for its rows until the send (and its record) no longer
+  fits hands the mail back unsent, claimable at once by the next run. It answers 503 and claims nothing without
+  mail settings.
+- Finding who needs a link: a closed card of an allowed request shows its mail's state beside the badges
+  (`승인 메일 없음`, `설치 링크 만료`, `설치 링크로 받음`, `승인 메일 안 감`, …), and an opened card says what the mailed
+  link is now (not downloaded yet and until when, downloaded, expired, closed). These are read from the link's own
+  row; nothing new is stored.
+- Sending a new link is per request, chosen by the operator; there is no bulk send and no limit on how often.
+  A request allowed before approval mails has none: `새 설치 링크 메일 보내기` sends its first one. After a mail whose
+  link expired, was downloaded or was closed, `새 링크로 다시 보내기` sends a new one at once; while the mailed link
+  still works (or the mail is uncertain), `승인 메일 다시 보내기` asks for a confirmation first. Every new mail
+  carries a new link that downloads once and closes the previous link (an old or expired one included).
+- The operator's button (`POST …/approval-mail` with `{expectedMailId, intent}`): `승인 메일 지금 보내기` (`send`) for a
+  waiting or interrupted mail or none yet; `승인 메일 다시 보내기` (`resend`) after a finished one, with a confirmation
+  when it may already have arrived. A resend is a new mail with a new link, which closes the previous link. A card
+  that is out of date (another tab, the recovery run, a repeated request) gets 409 and sends nothing.
+- A withdrawal and a mail already handed to the mail service can overlap: that mail then carries a link that no
+  longer opens. Revoking the link or making one by hand cancels a mail not yet sent; those actions answer with the
+  request's progress, so the card shows it. A link made by hand stops being offered on the card (address, copy
+  buttons) once an approval mail sent after it replaced it. A card makes one link change at a time (a link by hand,
+  its revocation, an approval mail), so a late answer of one never lands over the other. Mail and link answers
+  update only the progress of the list's row as it is when they arrive (the newer mail and code mail win, and a
+  mailed link already seen closed, downloaded or expired never reads as open again), never
+  its version, status, note or approval: drafts survive, a save that ended meanwhile stays, and a later save still
+  meets a change made elsewhere as a conflict.
+- Tests: `src/lib/admin/__tests__/approval-mail.test.ts` (attempt order, handlers, recovery route, mail content)
+  and `approval-mail.integration.test.ts` on Postgres with an in-memory sender: one mail per approval, concurrent
+  saves and presses, withdrawal and re-approval, a stalled earlier attempt, a link made by hand or revoked, no
+  installer, an interrupted or lost save, a lost answer, refused and uncertain answers, the admin guard and the
+  card's read-only progress fields.
+
 ## Private install links
 
-A person whose updates are allowed can get a full installer without any public download. In the admin inbox,
-an allowed request's card has `비공개 설치 링크`: `설치 링크 만들기` issues a link valid for 72 hours
-(`INSTALL_LINK_TTL_HOURS`) and shows its address once. `메일 본문 복사` copies the mail's body with the link, and
-`Gmail로 링크 메일 작성` or `메일 앱으로 링크 메일 작성` opens a draft to the stored email with only the recipient and
-subject, for the operator to paste the body in and send. Nothing is mailed automatically.
+A person whose updates are allowed can get a full installer without any public download. Saving an approval mails
+a new link to the stored email by itself (see [Approval mail](#approval-mail)). In the admin inbox, an allowed
+request's card also has `비공개 설치 링크` for handing a link over again or recovering: `설치 링크 만들기` issues a
+link valid for 72 hours (`INSTALL_LINK_TTL_HOURS`) and shows its address once, and cancels an approval mail not yet
+handed to the mail service (its link would replace this one). `메일 본문 복사` copies the mail's body with the link,
+and `Gmail로 링크 메일 작성` or `메일 앱으로 링크 메일 작성` opens a draft to the stored email with only the recipient
+and subject, for the operator to paste the body in and send.
 
 - Address: `https://nokka-web.vercel.app/install#<token>`. The secret is in the fragment, which browsers never send,
   so it is never in a request path, query string or referrer: the request fields that hosting logs (Vercel Runtime
@@ -108,57 +175,87 @@ subject, for the operator to paste the body in and send. Nothing is mailed autom
   `/install` again with `location.replace`, handing the token over in `window.name` (kept by the tab across a
   same-origin load, never sent or stored by the browser) with a `sessionStorage` marker that proves this tab sent
   it. Chromium keeps the address a tab opened, fragment included, in that history entry (`userTypedURL`) even
-  after `history.replaceState`; the entry that replaces it does not have it. The page loaded in its place sends
-  the token once in a JSON body to `POST /api/updates/v1/install/session`. Another link opened in the same tab (a
-  fragment change) leaves its entry the same way, also while an earlier link is still checked; the previous
-  download disappears first, and only the answer for the link opened last is shown. A tab that can not store the
-  marker, or a browser that once lost a handed-over token, checks links in place instead, and that entry keeps
-  the address. A failure can be retried with the token in memory. A reload (or back and forward) shows the last
-  final answer again from the entry's own history state (`ref`, build and expiry, nothing secret), so a tab opened
-  from this one, which copies its `sessionStorage` but not its entries, never shows it. A download shown again (also
-  from the back-forward cache) keeps its button only once a `HEAD` of its address still answers 200 with this
-  browser's cookie (no button while it is asked): 410 (revoked, replaced or expired since) or 404 (the cookie is
-  gone) shows it as closed from then on, past its expiry it is closed without asking, and an unreachable address
-  leaves it as it was. A reload while a link is
-  checked asks for the link again. A link opens once: the page keeps what a link opened in `localStorage` under its
-  own key, the SHA-256 of its token (never the token), and the same link opened again in this browser shows its
-  download while a `HEAD` of its download address still answers 200 with its cookie (404: used, the cookie is not
-  here; 410: closed). A `410 USED` gets its own text (opened before; only the first browser downloads). It is still
-  checked against this browser: another tab may have opened the link meanwhile (the used tab turns into the
-  download on that tab's `storage` event or on reload), and when the refusal names the link (`link` with `ref`,
-  build and expiry, or the same fields beside `code`) a `HEAD` with this browser's cookie recovers a first answer
-  whose body was cut short. The browser's own records of the address it opened (its history database) still hold
-  the link, as for any
-  link. A prerendered page waits until it is shown before it reads the link. An open link answers with its `ref`
-  (a random UUID that is not
-  secret) and gets its own HttpOnly, Secure, `SameSite=Strict` cookie, `__Secure-nokka-install-<ref>`, scoped to
-  `/api/updates/v1/install/<ref>` for the link's remaining lifetime.
-- Download: the page's button is an ordinary link to that link's own `GET`/`HEAD
-  /api/updates/v1/install/<ref>/Nokka.dmg`, so the browser's own download and its resume (`Range` with `If-Range`)
-  work with that link's cookie. Links opened in several tabs never share a cookie: each tab downloads and resumes
-  exactly the link and build it shows. The address only opens with the session of the link `ref`; the `ref` in
-  logs opens nothing. Tools open the link with the same `POST` and send the cookie, or its value as
+  after `history.replaceState`; the entry that replaces it does not have it. A tab that can not store the marker,
+  or a browser that once lost a handed-over token, keeps the link in place instead, and that entry keeps the
+  address. Another link opened in the same tab (a fragment change) leaves its entry the same way; the previous
+  download disappears first, and only the link opened last is shown. The browser's own records of the address it
+  opened (its history database) still hold the link, as for any link. A prerendered page waits until it is shown.
+- The button uses the link, not the page: loading, reloading or previewing `/install` sends nothing, so a mail
+  scanner or preview that runs the page leaves the link unused. `설치 파일 받기` sends the token once in a JSON body,
+  `POST /api/updates/v1/install/session` with `{ "token": …, "action": "download" }`, and at once starts the
+  download of the link's own address with the cookie that answer set. The token stays only in the page's memory
+  while the button can be pressed (or pressed again after a failure). A reload, back or forward shows what the
+  entry last showed from its own history state (`ref`, build and expiry, nothing secret): before the button, a
+  request to open the link from the mail again (the token is gone with the document; it was not used); a download
+  only once a `HEAD` of its address still answers 200 with this browser's cookie (no button while it is asked).
+  Shown again, a link sent once whose `HEAD` answers 200 has not been sent yet: the page says so and offers
+  `설치 파일 받기` again, never starting it by itself; right after a press it only says the browser was asked to
+  download. A tab opened from this one, which copies its `sessionStorage` but
+  not its entries, never shows it. Pages from before the button kept each opened link under the SHA-256 of its
+  token in `localStorage`; the page removes those keys.
+- Opens once: the first successful button `POST` consumes the link's token and stores the SHA-256 of a new session
+  secret, which the link's HttpOnly, Secure, `SameSite=Strict` cookie `__Secure-nokka-install-<ref>` (scoped to
+  `/api/updates/v1/install/<ref>` for the link's remaining lifetime) carries instead of the token. Every later
+  `POST` with that token, at the same time or after, gets 410 `USED` with no cookie but the same `ref` and package
+  details (nothing secret); a closed link answers a plain `GONE` first. The page then checks `HEAD` on the named
+  address with this browser's cookies: 200 means this browser holds the session and has not received the package
+  yet (another tab pressed first, or the first answer's body was lost), so it downloads; 404 means another browser
+  pressed first (`이미 사용되었습니다`); 410 means it was sent here already or the link closed. The opening is one
+  transaction that holds the link row and judges it by what is committed and the clock at that moment, so
+  concurrent presses, revocation, replacement and approval withdrawal take turns, and a refused or failed opening
+  (404, 409, 410, 503) leaves the token unused.
+- Sent once: links issued since migration 0009 (`single_transfer`) send their package once, whole. Answers say
+  `Accept-Ranges: none` and a satisfiable `Range` gets the whole file (200): a part of a DMG installs nothing.
+  `HEAD`, 304 and a range not satisfiable as sent (416, also behind an `If-Range` that no longer matches) take
+  nothing. A `GET` reads the package's first chunk, then takes the link's one transfer in a transaction that holds
+  the link row and shares the package row (the release tool updates it to withdraw the package, so the two take
+  turns), and judges expiry, revocation, approval and package in the one statement that takes it, by the clock at
+  that moment (`transfer_started_at`, counted as the download); only then is the status line sent. A transfer
+  taken by a concurrent request, a link closed meanwhile or a failure to record it sends no byte of the package
+  (410 `USED`, 410 `GONE` or 503; the prepared chunk is dropped). A request whose client went away
+  (`request.signal`) before the transfer is committed takes nothing (499). On Vercel that signal is only aborted
+  for functions that opt in: `vercel.json` sets `supportsCancellation` for the download route alone
+  (`src/app/api/updates/v1/install/*/Nokka.dmg/route.ts`; `*` because a glob reads `[ref]` as a character class,
+  and a test checks that it matches that route and no other). Vercel then also ends the function when its client
+  goes away; a response already sending bytes has nobody left to send them to. Without it a request cancelled while
+  its first chunk was read or while it waited for the link row could still take the transfer. Shown again with
+  its address unreachable (offline, 503), a link sent once is shown as not checked, with `다시 확인`: never as
+  not sent, since a download may have taken it. Every later request, the
+  same browser's resume included, gets 410 `USED`: a download cut off needs a new link, which the page and the
+  refusal say (reply to the mail). Whether the DMG was then installed, or installed again from the file, is not
+  something the site can see.
+- Rolling back: links sent once keep their token's and session's SHA-256 under a key of their own (`onceKey`),
+  while versions before 0009 look links up by the plain SHA-256 only. So a rollback never serves them by the
+  earlier rules: there they open nothing (the page says the link can't be used, the download answers 404). A link
+  nobody opened works again, by its own rules, once this version is back. **A link already opened may not:** the
+  earlier version answers that browser's download request (a reload of the page that shows it asks with a `HEAD`,
+  as does a download) with 404 and clears its cookie (`Max-Age=0`), and the token is used, so back on this version
+  that browser gets 404 for the download and 410 `USED` for the button and needs a new link. Expect to reissue
+  links (or resend the approval mail) to whoever opened one before or during the rollback and has not received the
+  installer; a browser that kept its cookie still downloads once. During a rollback the earlier admin panel issues
+  links by the earlier rules (opened as the page loads, downloaded until they close); after rolling forward those
+  keep those rules until they close (72 hours at most), unless the operator revokes them or issues new ones.
+  Migration 0009 goes first (its default keeps links the earlier version issues by the earlier rules), then this
+  version; nothing has to be switched on in between.
+- Earlier links keep their rules. Links issued before 0009 (`single_transfer` false, the column's default, so a
+  link the previous version issues while the migration is ahead of it stays such a link) open with the token alone,
+  as the page before the button sent it, and their session downloads and resumes (`Range` with `If-Range`, 206)
+  until the link closes; a session opened before 0009 keeps working. A link issued since 0009 opened without
+  `action` (a page from before the button, which opens links as soon as it loads) gets 409 `BUTTON_REQUIRED` and
+  stays unused. Links issued before migration 0008 can still be opened once; download cookies set before it
+  carried the token and are refused (404) and cleared.
+- Download: `GET`/`HEAD /api/updates/v1/install/<ref>/Nokka.dmg`, only with the session of the link `ref`; the
+  `ref` in logs opens nothing. Tools open the link with the same `POST` and send the cookie, or its value as
   `Authorization: Bearer`. Answers carry `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and
   `Content-Disposition: attachment`. A missing, malformed, unknown or other link's session (the link's own token
-  included) gets 404, and a closed link 410; both clear that link's cookie. Refusals are short plain text without
-  package bytes. The secret still travels in the mail itself, which is the delivery channel.
-- Opens once: the first successful `POST /api/updates/v1/install/session` consumes the link's token and stores the
-  SHA-256 of a new session secret, which the cookie carries instead of the token. Every later `POST` with that
-  token, at the same time or after, gets 410 `USED` with no cookie but the same `ref` and package details as the
-  first answer (nothing secret); a closed link answers a plain `GONE` first. The session keeps downloading and
-  resuming until the link closes. The opening is one transaction that holds the link row and
-  only then judges it, by what is committed and the clock at that moment, so concurrent openings, revocation,
-  replacement and approval withdrawal take turns, an opening that waited past the expiry is refused, and a refused
-  or failed opening (404, 410, 503) leaves the token unused for a retry. A page that lost the successful answer's
-  body, or whose tab was refused because another tab of the same browser opened the link first, checks `HEAD` on
-  the named download address with the browser's cookies: 200 means this browser holds the session and can download
-  and resume. A browser without that session (another browser, or the cookie was lost too) gets 404 and needs a new
-  link: the token never makes a second session. Links issued before migration 0008 can still be opened once;
-  download cookies set before it carried the token and are refused (404) and cleared, so the link is opened again.
+  included) gets 404, and a closed or (sent once) already sent link 410; both clear that link's cookie. Refusals
+  are short plain text without package bytes. The secret still travels in the mail itself, which is the delivery
+  channel.
 - Closing: one open link per request. A new link revokes the previous one, `링크 회수` (`DELETE` on the same admin
-  path) revokes it, and withdrawing the approval revokes it for good: allowing updates again needs a new link.
-  Expiry, revocation and withdrawal refuse every **new** request at once, including the session, `HEAD` and a
-  resumed range. **A response that is already sending bytes is not cut off and can finish**; the next request is
+  path) revokes it and cancels the request's approval mails not yet handed to the mail service (so no later run
+  sends them with a new link), and withdrawing the approval revokes it for good: allowing updates again mails a new
+  link. Expiry, revocation and withdrawal refuse every **new** request at once, including the session, `HEAD` and
+  a resumed range. **A response that is already sending bytes is not cut off and can finish**; the next request is
   refused. The database keeps only the token's and the session's SHA-256, the build, the times and a download
   count (no addresses).
 - Installer: `node scripts/update-packages.mjs installer --build <N|none>` chooses what new links serve. It can be
@@ -167,16 +264,25 @@ subject, for the operator to paste the body in and send. Nothing is mailed autom
 - API: `POST`/`DELETE /api/admin/applications/:id/install-link`, with the same admin checks as the inbox API.
   `POST` answers 409 `UPDATES_NOT_APPROVED` or `NO_INSTALLER` when no link can be issued.
 - Code: `src/lib/update-packages/install-{contracts,handlers,links}.ts`, `src/app/install`,
-  `src/components/install/InstallLinkPage.tsx`, `src/components/admin/InstallLinkPanel.tsx`, migrations 0007 and
-  0008. `install-links.integration.test.ts` runs on Postgres with `APPLICATIONS_TEST_DATABASE_URL`. It covers
-  issuing, downloads over local HTTP, two links open in one browser, replacement, revocation (including a download
-  already under way), expiry, approval and package withdrawal, opening once (many openings at once, a revocation,
-  expiry or approval withdrawal while an opening waits, a failed opening retried, a lost first answer with and
-  without its cookie, resumes until expiry, links issued before 0008), and checks that no request line carried a
-  secret.
-- Before release, check on an isolated Preview with a synthetic link: open it, download in full and resumed, open
-  it again (410 `USED`), and confirm that neither the Runtime Logs nor an active Log Drain contain the token or the
-  session secret.
+  `src/components/install/InstallLinkPage.tsx`, `src/components/admin/InstallLinkPanel.tsx`, migrations 0007, 0008
+  and 0009. `install-links.integration.test.ts` runs on Postgres with `APPLICATIONS_TEST_DATABASE_URL`. It covers
+  issuing, downloads over local HTTP, the button (a page from before and `HEAD` use nothing), sending once (whole
+  for a range, two downloads at once, a link revoked, its approval or package withdrawn, or expired while the
+  transfer waits, the database failing, a client gone before the transfer), links sent once out of reach of
+  earlier versions,
+  replacement, revocation (including a download already under way, and approval mails not yet sent), expiry,
+  approval and package withdrawal, opening once (many presses at once, a revocation, expiry or approval withdrawal
+  while an opening waits, a failed opening retried, a lost first answer with and without its cookie), links issued
+  before 0008 and 0009 (two links open in one browser, resumes until expiry), and checks that no request line
+  carried a secret.
+- Before release, check on an isolated Preview with a synthetic link: open and reload it (nothing used), press the
+  button (the download starts; a second download and a resume are refused, 410 `USED`), press it in another
+  browser (`이미 사용되었습니다`), and confirm that neither the Runtime Logs nor an active Log Drain contain the
+  token or the session secret. The `functions` pattern must be accepted by the Preview build and shown for the
+  download function; the whole download must still arrive (cancellation ends a function only when its client goes
+  away). The window it guards (between the first chunk and the transfer) is too short to hit reliably from outside,
+  so a request cancelled in it keeping the transfer is checked by the tests (`install-links.integration.test.ts`,
+  a local server that aborts `request.signal` as the client closes), not on Vercel.
 
 ## Daily digest
 

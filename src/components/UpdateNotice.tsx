@@ -1,26 +1,9 @@
-import { Fragment, type ReactNode } from "react";
 import type { Dictionary, Locale } from "@/dictionaries";
+import { withAppLabels } from "./appLabels";
 
 interface UpdateNoticeProps {
   dict: Dictionary["updates"];
   locale: Locale;
-}
-
-/**
- * The app's interface is Korean, so the English copy quotes its labels in Korean (‘코드 받기’). Each such quote is
- * marked lang="ko" so screen readers switch pronunciation (WCAG 3.1.2); the quote marks stay outside.
- */
-function text(copy: string, locale: Locale): ReactNode {
-  if (locale === "ko") return copy;
-  return copy.split(/(‘[^’]*’)/).map((part, i) =>
-    /^‘[^’]*\p{Script=Hangul}[^’]*’$/u.test(part) ? (
-      <Fragment key={i}>
-        ‘<span lang="ko">{part.slice(1, -1)}</span>’
-      </Fragment>
-    ) : (
-      part
-    )
-  );
 }
 
 const sectionClass = "border-t border-line-subtle px-4 py-14 md:px-8 md:py-20";
@@ -56,7 +39,7 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
           >
             {dict.heading}
           </h1>
-          <p className="mt-5 text-pretty text-lg leading-relaxed text-fg-muted">{text(dict.intro, locale)}</p>
+          <p className="mt-5 text-pretty text-lg leading-relaxed text-fg-muted">{withAppLabels(dict.intro, locale)}</p>
         </div>
       </section>
 
@@ -65,12 +48,12 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
           <h2 id="updates-check-heading" className={headingClass}>
             {dict.check.heading}
           </h2>
-          <p className={`mt-4 ${bodyClass}`}>{text(dict.check.intro, locale)}</p>
+          <p className={`mt-4 ${bodyClass}`}>{withAppLabels(dict.check.intro, locale)}</p>
           <dl className="mt-6 divide-y divide-line-subtle border-y border-line-subtle">
             {dict.check.cases.map((item) => (
               <div key={item.term} className="grid gap-1 py-4 sm:grid-cols-[180px_1fr] sm:gap-4">
                 <dt className="text-sm font-medium text-fg">{item.term}</dt>
-                <dd className={bodyClass}>{text(item.detail, locale)}</dd>
+                <dd className={bodyClass}>{withAppLabels(item.detail, locale)}</dd>
               </div>
             ))}
           </dl>
@@ -85,7 +68,7 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
           <ol className="mt-6 list-decimal space-y-4 pl-6 marker:font-semibold marker:text-accent-text">
             {dict.register.steps.map((step) => (
               <li key={step} className={`pl-2 ${bodyClass}`}>
-                {text(step, locale)}
+                {withAppLabels(step, locale)}
               </li>
             ))}
           </ol>
@@ -95,7 +78,7 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
             <ul className="mt-3 list-disc space-y-2 pl-5 marker:text-fg-subtle">
               {dict.register.notes.map((note) => (
                 <li key={note} className={bodyClass}>
-                  {text(note, locale)}
+                  {withAppLabels(note, locale)}
                 </li>
               ))}
             </ul>
@@ -111,7 +94,7 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
           <ul className="mt-6 list-disc space-y-3 pl-5 marker:text-fg-subtle">
             {dict.change.items.map((item) => (
               <li key={item} className={bodyClass}>
-                {text(item, locale)}
+                {withAppLabels(item, locale)}
               </li>
             ))}
           </ul>
@@ -125,7 +108,7 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
           </h2>
           {dict.installer.body.map((paragraph) => (
             <p key={paragraph} className={`mt-4 ${bodyClass}`}>
-              {text(paragraph, locale)}
+              {withAppLabels(paragraph, locale)}
             </p>
           ))}
         </div>
@@ -136,7 +119,7 @@ export default function UpdateNotice({ dict, locale }: UpdateNoticeProps) {
           <h2 id="updates-apply-heading" className={headingClass}>
             {dict.apply.heading}
           </h2>
-          <p className={`mt-4 ${bodyClass}`}>{text(dict.apply.body, locale)}</p>
+          <p className={`mt-4 ${bodyClass}`}>{withAppLabels(dict.apply.body, locale)}</p>
           <a
             href={`/${locale}#apply`}
             className="mt-6 inline-flex h-11 items-center rounded-full bg-accent-strong px-5 text-sm font-medium text-white transition-colors duration-150 hover:bg-accent-stronger"

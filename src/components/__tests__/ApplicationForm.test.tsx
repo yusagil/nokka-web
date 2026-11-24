@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import en from "@/dictionaries/en.json";
+import ko from "@/dictionaries/ko.json";
 import ApplicationForm from "../ApplicationForm";
 
 const form = en.apply.form;
@@ -25,7 +26,7 @@ afterEach(() => {
 
 async function fillAndSubmit(name: string, email: string, options?: Parameters<typeof userEvent.setup>[0]) {
   const user = userEvent.setup(options);
-  render(<ApplicationForm dict={form} />);
+  render(<ApplicationForm dict={form} locale="en" />);
   await user.type(screen.getByLabelText("Name"), name);
   await user.type(screen.getByLabelText("Email"), email);
   await user.click(screen.getByRole("button", { name: form.submit }));
@@ -34,7 +35,7 @@ async function fillAndSubmit(name: string, email: string, options?: Parameters<t
 
 describe("ApplicationForm", () => {
   it("asks only for a name and an email, and posts instead of putting them in the URL", () => {
-    const { container } = render(<ApplicationForm dict={form} />);
+    const { container } = render(<ApplicationForm dict={form} locale="en" />);
     expect(screen.getAllByRole("textbox")).toHaveLength(2);
     expect(screen.getByText(form.purpose)).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveAttribute("autocomplete", "name");
@@ -44,7 +45,7 @@ describe("ApplicationForm", () => {
 
   it("shows field errors and focuses the first one without sending anything", async () => {
     const user = userEvent.setup();
-    render(<ApplicationForm dict={form} />);
+    render(<ApplicationForm dict={form} locale="en" />);
     await user.click(screen.getByRole("button", { name: form.submit }));
 
     const name = screen.getByLabelText("Name");
@@ -85,6 +86,48 @@ describe("ApplicationForm", () => {
     expect(logged).not.toMatch(/kim@example\.com/);
   });
 
+  it("says what happens next and links to the same-language update guide, carrying nothing from the form", async () => {
+    fetchMock.mockResolvedValue(reply(200, { ok: true }));
+    await fillAndSubmit("Kim", "kim@example.com");
+
+    const done = await screen.findByRole("heading", { name: form.doneHeading });
+    const panel = done.parentElement!;
+    expect(panel).toHaveTextContent(form.doneBody);
+    const link = screen.getByRole("link", { name: form.doneLink });
+    expect(link).toHaveAttribute("href", "/en/updates");
+    expect(panel.innerHTML).not.toMatch(/kim/i);
+  });
+
+  it("tells people who already use Nokka to register from the app's update check, marking the Korean label", async () => {
+    fetchMock.mockResolvedValue(reply(200, { ok: true }));
+    await fillAndSubmit("Kim", "kim@example.com");
+
+    const done = await screen.findByRole("heading", { name: form.doneHeading });
+    const panel = done.parentElement!;
+    expect(panel).toHaveTextContent(form.doneExisting);
+    const label = panel.querySelector('[lang="ko"]');
+    expect(label).toHaveTextContent(/^업데이트 확인…$/);
+    expect(label?.parentElement).toHaveTextContent("‘업데이트 확인…’ (Check for Updates)");
+  });
+
+  it("gives the Korean confirmation and the Korean update guide", async () => {
+    fetchMock.mockResolvedValue(reply(200, { ok: true }));
+    const user = userEvent.setup();
+    render(<ApplicationForm dict={ko.apply.form} locale="ko" />);
+    await user.type(screen.getByLabelText("이름"), "김노까");
+    await user.type(screen.getByLabelText("이메일"), "kim@example.com");
+    await user.click(screen.getByRole("button", { name: "신청하기" }));
+
+    expect(await screen.findByRole("heading", { name: "사용 신청이 접수되었습니다" })).toHaveFocus();
+    expect(screen.getByText(ko.apply.form.doneBody)).toBeInTheDocument();
+    expect(screen.getByText(ko.apply.form.doneExisting)).not.toHaveAttribute("lang");
+    expect(document.querySelector("[lang]")).toBeNull();
+    expect(screen.getByRole("link", { name: "업데이트 등록 방법 보기" })).toHaveAttribute(
+      "href",
+      "/ko/updates"
+    );
+  });
+
   it("sends one request when the button is pressed again while sending", async () => {
     let finish: (value: unknown) => void = () => {};
     fetchMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
@@ -106,6 +149,7 @@ describe("ApplicationForm", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(form.errors.unconfirmed);
     expect(screen.queryByRole("heading", { name: form.doneHeading })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: form.doneLink })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("Kim");
     expect(screen.getByLabelText("Email")).toHaveValue("kim@example.com");
 
@@ -151,7 +195,9 @@ describe("ApplicationForm", () => {
 
     await vi.advanceTimersByTimeAsync(20_000);
     expect(await screen.findByRole("alert")).toHaveTextContent(form.errors.unconfirmed);
+    expect(screen.queryByRole("heading", { name: form.doneHeading })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("kim@example.com");
+    expect(screen.getByRole("button", { name: form.submit })).not.toHaveAttribute("aria-disabled", "true");
   });
 
   it("maps rejected requests to their own messages", async () => {

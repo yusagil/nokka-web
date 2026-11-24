@@ -4,8 +4,12 @@ import {
   ADMIN_REQUEST_HEADER,
   ADMIN_SEARCH_ENDPOINT,
   APPLICATION_STATUSES,
+  APPROVAL_MAIL_STATUSES,
+  approvalMailEndpoint,
   installLinkEndpoint,
   type AdminApplication,
+  type ApprovalMailIntent,
+  type ApprovalMailRequest,
   type AdminErrorCode,
   type AdminFieldErrors,
   type ApplicationPatch,
@@ -33,9 +37,12 @@ export type SearchOutcome =
 
 export type UpdateOutcome = { ok: true; item: AdminApplication } | ClientFailure;
 
-export type IssueLinkOutcome = { ok: true; link: InstallLink } | ClientFailure;
+/** `item`: the request as stored after the change, when the server could read it. */
+export type IssueLinkOutcome = { ok: true; link: InstallLink; item?: AdminApplication } | ClientFailure;
 
-export type RevokeLinkOutcome = { ok: true; revoked: number } | ClientFailure;
+export type RevokeLinkOutcome = { ok: true; revoked: number; item?: AdminApplication } | ClientFailure;
+
+export type ApprovalMailOutcome = { ok: true; item: AdminApplication } | ClientFailure;
 
 interface SearchParams {
   q: string;
@@ -56,7 +63,23 @@ function isApplication(value: unknown): value is AdminApplication {
     (item.lastContactedAt === null || typeof item.lastContactedAt === "string") &&
     typeof item.updatedAt === "string" &&
     typeof item.updatesApproved === "boolean" &&
+    typeof item.macRegistered === "boolean" &&
+    (item.latestCodeMail === null || isRecord(item.latestCodeMail)) &&
+    (item.approvalMail === null || isApprovalMail(item.approvalMail)) &&
     APPLICATION_STATUSES.includes(item.status as AdminApplication["status"])
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+function isApprovalMail(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.createdAt === "string" &&
+    APPROVAL_MAIL_STATUSES.includes(value.status as (typeof APPROVAL_MAIL_STATUSES)[number])
   );
 }
 
@@ -160,7 +183,7 @@ export async function issueInstallLink(id: AdminApplication["id"]): Promise<Issu
 
   const { status: httpStatus, body } = result;
   if (httpStatus === 201 && body.ok === true && isInstallLink(body.link)) {
-    return { ok: true, link: body.link };
+    return { ok: true, link: body.link, ...(isApplication(body.item) ? { item: body.item } : {}) };
   }
   return failure(body);
 }
@@ -171,7 +194,27 @@ export async function revokeInstallLink(id: AdminApplication["id"]): Promise<Rev
 
   const { status: httpStatus, body } = result;
   if (httpStatus === 200 && body.ok === true && Number.isInteger(body.revoked)) {
-    return { ok: true, revoked: body.revoked as number };
+    return { ok: true, revoked: body.revoked as number, ...(isApplication(body.item) ? { item: body.item } : {}) };
+  }
+  return failure(body);
+}
+
+/**
+ * Sends the approval mail the card shows (`intent` "send"), or a new one after it ("resend"). The server
+ * refuses (409 CONFLICT) when the card is out of date, so a repeated press sends nothing more.
+ */
+export async function requestApprovalMail(
+  id: AdminApplication["id"],
+  expectedMailId: string | null,
+  intent: ApprovalMailIntent
+): Promise<ApprovalMailOutcome> {
+  const request: ApprovalMailRequest = { expectedMailId, intent };
+  const result = await send(approvalMailEndpoint(id), { method: "POST", body: JSON.stringify(request) });
+  if ("ok" in result) return result;
+
+  const { status: httpStatus, body } = result;
+  if (httpStatus === 200 && body.ok === true && isApplication(body.item)) {
+    return { ok: true, item: body.item };
   }
   return failure(body);
 }

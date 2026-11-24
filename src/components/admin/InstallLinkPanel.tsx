@@ -5,10 +5,15 @@ import { INSTALL_LINK_TTL_HOURS, type AdminApplication, type InstallLink } from 
 import { issueInstallLink, revokeInstallLink, type ClientFailure } from "./api";
 import { copy } from "./copy";
 import { composeInstallLinkGmail, composeInstallLinkMailto, formatDateTime, installLinkMailBody } from "./format";
+import type { LinkLock } from "./progress";
 
 interface InstallLinkPanelProps {
   /** A request whose updates are allowed as saved. */
   item: AdminApplication;
+  /** The request as stored after a link change (an approval mail not yet sent is cancelled by it). */
+  onItem?: (item: AdminApplication) => void;
+  /** The card's one-link-change-at-a-time turn, shared with the approval mail. */
+  lock?: LinkLock;
 }
 
 const BUTTON =
@@ -35,7 +40,7 @@ function errorText(failure: ClientFailure, fallback: string) {
  * Issues and revokes the request's private install link. A new link's URL is held only in this
  * component's state, so it is gone once the card closes or the page reloads; the server keeps a hash.
  */
-export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
+export default function InstallLinkPanel({ item, onItem, lock }: InstallLinkPanelProps) {
   const id = useId();
   const [link, setLink] = useState<InstallLink | null>(null);
   const [busy, setBusy] = useState<"issue" | "revoke" | null>(null);
@@ -55,8 +60,24 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
   const [bodyShown, setBodyShown] = useState(false);
   const bodyInput = useRef<HTMLTextAreaElement>(null);
 
+  // An approval mail sent since carries a newer link, which closed this one: its address and body are no
+  // longer offered (copying them stops with them).
+  const mailLinkUntil = item.approvalMail?.linkExpiresAt ?? null;
+  const [mailLinkSeen, setMailLinkSeen] = useState(mailLinkUntil);
+  if (mailLinkUntil !== mailLinkSeen) {
+    setMailLinkSeen(mailLinkUntil);
+    if (link && mailLinkUntil && Date.parse(mailLinkUntil) > Date.parse(link.expiresAt)) {
+      setLink(null);
+      setBodyShown(false);
+      setError("");
+      setMessage(copy.installLinkReplacedByMail);
+    }
+  }
+
   async function run(kind: "issue" | "revoke") {
     if (pending.current) return;
+    // While an approval mail is being sent, its link would replace (or be replaced by) this one.
+    if (lock && !lock.acquire()) return;
     pending.current = true;
     generation.current += 1;
     const replacing = link !== null;
@@ -68,6 +89,7 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
       const result = await issueInstallLink(item.id);
       if (result.ok) {
         setLink(result.link);
+        if (result.item) onItem?.(result.item);
         // The old link is blocked now, and so is anything copied with it.
         if (replacing) setMessage(copy.installLinkReissued);
         // Focus the address so it can be copied right away.
@@ -79,6 +101,7 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
       const result = await revokeInstallLink(item.id);
       if (result.ok) {
         setLink(null);
+        if (result.item) onItem?.(result.item);
         setMessage(result.revoked > 0 ? copy.installLinkRevoked : copy.installLinkNoneOpen);
       } else {
         setError(errorText(result, copy.installLinkRevokeFailed));
@@ -86,6 +109,7 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
     }
     pending.current = false;
     setBusy(null);
+    lock?.release();
   }
 
   async function copyText(text: string, copied: string, failed: () => void) {
@@ -210,13 +234,13 @@ export default function InstallLinkPanel({ item }: InstallLinkPanelProps) {
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <button type="button" onClick={() => run("issue")} aria-disabled={busy !== null} className={BUTTON}>
+        <button type="button" onClick={() => run("issue")} aria-disabled={busy !== null || lock?.busy} className={BUTTON}>
           {busy === "issue" ? copy.installLinkIssuing : link ? copy.installLinkReissue : copy.installLinkIssue}
         </button>
         <button
           type="button"
           onClick={() => run("revoke")}
-          aria-disabled={busy !== null}
+          aria-disabled={busy !== null || lock?.busy}
           aria-describedby={`${id}-revoke-hint`}
           className={BUTTON}
         >

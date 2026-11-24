@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import type { Dictionary } from "@/dictionaries";
+import type { Dictionary, Locale } from "@/dictionaries";
 import {
   APPLICATIONS_ENDPOINT,
   type ApplicationField,
@@ -10,6 +10,7 @@ import {
   type FieldErrors,
 } from "@/lib/applications/contracts";
 import { validateApplication } from "@/lib/applications/validation";
+import { withAppLabels } from "./appLabels";
 
 // Past this, the request may or may not have been stored, so the form says it couldn't confirm it.
 const TIMEOUT_MS = 20_000;
@@ -20,6 +21,7 @@ type Messages = Partial<Record<ApplicationField, string>>;
 
 interface ApplicationFormProps {
   dict: FormDict;
+  locale: Locale;
   className?: string;
 }
 
@@ -48,7 +50,7 @@ async function readResult(response: Response): Promise<ApplicationResult | null>
   }
 }
 
-export default function ApplicationForm({ dict, className = "" }: ApplicationFormProps) {
+export default function ApplicationForm({ dict, locale, className = "" }: ApplicationFormProps) {
   const id = useId();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -152,6 +154,16 @@ export default function ApplicationForm({ dict, className = "" }: ApplicationFor
             {dict.doneHeading}
           </h3>
           <p className="mt-2 text-pretty leading-relaxed text-fg-muted">{dict.doneBody}</p>
+          <p className="mt-2 text-pretty leading-relaxed text-fg-muted">
+            {withAppLabels(dict.doneExisting, locale)}
+          </p>
+          {/* The same text for a new or a repeated request, and a link that carries nothing from the form. */}
+          <a
+            href={`/${locale}/updates`}
+            className="mt-4 inline-flex min-h-11 items-center text-[15px] font-medium text-accent-text underline underline-offset-4"
+          >
+            {dict.doneLink}
+          </a>
         </div>
       ) : (
         <form

@@ -5,7 +5,9 @@
 // API handler; the session and download go over a local HTTP server (127.0.0.1) that hands requests to
 // the real route handlers and records every request line, as a hosting log would. Nothing else leaves
 // the process. Links open once: the tests keep, like one browser, the session cookie of each link they
-// opened.
+// opened. Links issued now open only from the page's button and send their package once; tests of the rules
+// links issued before 0009 keep (downloads and resumes until they close) mark their link as such (`legacy`).
+// The approval mail runs with a recording sender in place of Gmail.
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -27,12 +29,15 @@ import {
   initChannel,
   publishPackage,
   setInstaller,
+  withdrawPackage,
 } from "../../../../scripts/update-packages.mjs";
+import { sendApprovalMail, sendLeftBehindApprovalMails, type ApprovalMailServices } from "@/lib/admin/approval-mail";
+import { createApprovalMailStore } from "@/lib/admin/approval-mail-store";
 import { createInstallLinkHandlers as createAdminLinkHandlers } from "@/lib/admin/handlers";
 import { revokeUpdatesForTest } from "@/lib/updates/registration/test-support";
 import { installCookieName } from "../install-contracts";
 import { createInstallDownloadHandlers, createInstallSessionHandler } from "../install-handlers";
-import { createInstallLinkStore, type InstallLinkStore } from "../install-links";
+import { createInstallLinkStore, onceKey, type InstallLinkStore, type TransferOutcome } from "../install-links";
 import { createPackageStore, type PackageStore } from "../store";
 
 vi.mock("server-only", () => ({}));
@@ -59,6 +64,8 @@ describe.skipIf(!url)("private install links on Postgres", () => {
   const tokens: string[] = [];
   // Holds every chunk read after the first one of a response while set (see the in-flight test).
   let gate: Promise<void> | null = null;
+  // Requests whose client went away before their answer was sent.
+  let clientsGone = 0;
   const chunkReads: number[] = [];
 
   const tool = (...args: string[]) =>
@@ -134,15 +141,18 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     return { token: tokenOf(body.link.url), link: body.link };
   };
 
+  /** Marks the link `token` as issued before 0009: it downloads and resumes until it closes. */
+  const legacy = async (token: string) => {
+    await sql`
+      UPDATE update_install_links SET single_transfer = false, token_hash = ${sha256(token)} WHERE token_hash = ${keyOf(token)}
+    `;
+  };
+
   // What one browser holds: the session cookie (`name=secret`) of each link it opened, by the link's token.
   const browser = new Map<string, string>();
-  /** What the /install page does with the fragment: one POST with the token in the body. */
+  /** What the /install page's button does with the fragment's token: one POST with it in the body. */
   const openLink = async (token: string) => {
-    const response = await fetch(`${origin}/api/updates/v1/install/session`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
+    const response = await postSession(token);
     const setCookie = response.headers.get("set-cookie");
     const cookie = setCookie?.split(";")[0] ?? null;
     if (cookie) {
@@ -152,22 +162,36 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     return { status: response.status, body: await response.json(), setCookie, cookie };
   };
   const secretOf = (cookie: string) => cookie.slice(cookie.indexOf("=") + 1);
-  /** The session POST as it arrives, for tests that lose parts of its answer. */
+  /** The button's session POST as it arrives, for tests that lose parts of its answer. */
   const postSession = (token: string) =>
     fetch(`${origin}/api/updates/v1/install/session`, {
       method: "POST",
       headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, action: "download" }),
+    });
+  /** What an /install page from before the button does as soon as it loads: the token alone. */
+  const openFromOldPage = async (token: string) => {
+    const response = await fetch(`${origin}/api/updates/v1/install/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ token }),
     });
+    return { status: response.status, body: await response.json(), setCookie: response.headers.get("set-cookie") };
+  };
   /** What the browser does with the download link: a GET to the link's own address with the cookies it holds. */
   const fetchDownload = (
     ref: string,
     cookie: string,
-    { method = "GET", headers = {} }: { method?: "GET" | "HEAD"; headers?: Record<string, string> } = {},
+    {
+      method = "GET",
+      headers = {},
+      signal,
+    }: { method?: "GET" | "HEAD"; headers?: Record<string, string>; signal?: AbortSignal } = {},
   ) =>
     fetch(`${origin}/api/updates/v1/install/${ref}/Nokka.dmg`, {
       method,
       headers: { cookie, "accept-encoding": "identity", ...headers },
+      signal,
     });
   const cookieFor = (ref: string, secret: string) => `${installCookieName(ref)}=${secret}`;
   /**
@@ -189,20 +213,23 @@ describe.skipIf(!url)("private install links on Postgres", () => {
   };
   const linkRow = async (token: string) => {
     const [row] = await sql`
-      SELECT ref::text AS ref, build, download_count, last_download_at, revoked_at, exchanged_at, session_hash,
-             extract(epoch FROM expires_at - created_at)::int AS ttl
-      FROM update_install_links WHERE token_hash = ${sha256(token)}
+      SELECT id::text AS id, ref::text AS ref, build, download_count, last_download_at, revoked_at, exchanged_at,
+             session_hash, single_transfer, transfer_started_at, extract(epoch FROM expires_at - created_at)::int AS ttl
+      FROM update_install_links WHERE token_hash IN (${sha256(token)}, ${keyOf(token)})
     `;
     return row;
   };
 
   const sha256 = (value: string) => createHash("sha256").update(value).digest();
+  // A link sent once keeps its token's hash under a key of its own (see onceKey); rows are found by either.
+  const keyOf = (token: string) => onceKey("token", sha256(token));
   /**
-   * Holds `token`'s link row locked from another connection, starts `requests`, waits until `waiting` of
-   * them wait for that row, runs `meanwhile` in the holding transaction, commits, and returns the answers.
+   * Holds `token`'s link row locked from another connection (or runs `hold` there), starts `requests`, waits
+   * until `waiting` of them wait for a lock, runs `meanwhile` in the holding transaction, commits, and returns
+   * the answers.
    */
   const whileHeld = async <T,>(
-    token: string,
+    hold: string | ((tx: postgres.TransactionSql) => Promise<unknown>),
     waiting: number,
     requests: () => Promise<T>[],
     meanwhile?: (tx: postgres.TransactionSql) => Promise<void>,
@@ -211,7 +238,11 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     let started: Promise<T>[] = [];
     try {
       await holder.begin(async (tx) => {
-        await tx`SELECT 1 FROM update_install_links WHERE token_hash = ${sha256(token)} FOR UPDATE`;
+        if (typeof hold === "string") {
+          await tx`SELECT 1 FROM update_install_links WHERE token_hash IN (${sha256(hold)}, ${keyOf(hold)}) FOR UPDATE`;
+        } else {
+          await hold(tx);
+        }
         started = requests();
         for (let tries = 0; ; tries++) {
           // Waiting for the row: on this transaction, or behind the first request that waits for it.
@@ -230,14 +261,23 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     }
     return Promise.all(started);
   };
-  // The session endpoint against `links`, called directly (for failures the HTTP server's store never has).
-  const sessionWith = (links: InstallLinkStore, newSessionSecret?: () => string) => (token: string) =>
-    createInstallSessionHandler({ getLinkStore: () => links, newSessionSecret })(
-      new Request(`${origin}/api/updates/v1/install/session`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token }),
-      }),
+  // The session endpoint against `links`, called directly (for failures the HTTP server's store never has), as
+  // the button calls it, or (`button: false`) as a page from before the button.
+  const sessionWith =
+    (links: InstallLinkStore, newSessionSecret?: () => string, { button = true } = {}) =>
+    (token: string) =>
+      createInstallSessionHandler({ getLinkStore: () => links, newSessionSecret })(
+        new Request(`${origin}/api/updates/v1/install/session`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(button ? { token, action: "download" } : { token }),
+        }),
+      );
+  // A download handler against `links`, called directly with a session secret in the link's cookie.
+  const downloadWithStore = (links: InstallLinkStore, ref: string, secret: string) =>
+    createInstallDownloadHandlers({ getLinkStore: () => links, getStore: () => createPackageStore(sql) }).GET(
+      new Request(`${origin}/api/updates/v1/install/${ref}/Nokka.dmg`, { headers: { cookie: cookieFor(ref, secret) } }),
+      { params: Promise.resolve({ ref }) },
     );
 
   beforeAll(async () => {
@@ -246,7 +286,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     sql = postgres(url!, { max: 8, prepare: false, onnotice: () => {}, connection: { options: `-c search_path=${schema}` } });
     const [{ current }] = await sql`SELECT current_schema() AS current`;
     if (current !== schema) throw new Error(`Test connection is not isolated (schema: ${current})`);
-    expect((await applyMigrations(sql)).at(-1)).toBe("0008_install_link_single_use.sql");
+    expect((await applyMigrations(sql)).at(-1)).toBe("0009_approval_mail_and_install_button.sql");
     folder = await mkdtemp(join(tmpdir(), "nokka-install-links-"));
 
     const packages = createPackageStore(sql);
@@ -263,6 +303,14 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     const download = createInstallDownloadHandlers(deps);
     server = createServer(async (req, res) => {
       requestLines.push(`${req.method} ${req.url} referer=${req.headers.referer ?? ""}`);
+      // As the hosting runtime does: the request's signal aborts once its client goes away before the answer.
+      const gone = new AbortController();
+      res.on("close", () => {
+        if (!res.writableFinished) {
+          clientsGone++;
+          gone.abort();
+        }
+      });
       const address = `${origin}${req.url}`;
       const headers = new Headers();
       for (const [name, value] of Object.entries(req.headers)) {
@@ -275,6 +323,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
         method,
         headers,
         body: method === "POST" ? Buffer.concat(chunks) : undefined,
+        signal: gone.signal,
       });
       const path = new URL(address).pathname;
       const file = /^\/api\/updates\/v1\/install\/([^/]+)\/Nokka\.dmg$/.exec(path);
@@ -344,10 +393,12 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     expect(event).toEqual({ action: "installer", build: BRIDGE, previous_build: null });
   });
 
-  it("opens a link once with the token in a body, then downloads with the session cookie, whole and resumed", async () => {
+  it("opens a link issued before 0009 once with the token in a body, then downloads with the session cookie, whole and resumed", async () => {
     const allowed = await application(true);
     const { token, link } = await issued(allowed);
     expect(link).toMatchObject({ build: BRIDGE, version: "2.7.0" });
+    expect(await linkRow(token)).toMatchObject({ single_transfer: true, transfer_started_at: null });
+    await legacy(token);
     const row = await linkRow(token);
     expect(row).toMatchObject({
       build: BRIDGE,
@@ -363,7 +414,15 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     const opened = await openLink(token);
     expect(opened.status).toBe(200);
     const ref = row.ref;
-    expect(opened.body).toEqual({ ok: true, ref, version: "2.7.0", build: BRIDGE, byteLength: SIZE, expiresAt: link.expiresAt });
+    expect(opened.body).toEqual({
+      ok: true,
+      ref,
+      version: "2.7.0",
+      build: BRIDGE,
+      byteLength: SIZE,
+      expiresAt: link.expiresAt,
+      singleTransfer: false,
+    });
     const [pair, maxAge, ...attributes] = opened.setCookie!.split("; ");
     // A session secret of its own, never the link's token; only its hash is stored, and the token is used.
     const secret = secretOf(pair);
@@ -433,9 +492,9 @@ describe.skipIf(!url)("private install links on Postgres", () => {
       expect(attempt.body).toEqual({ ...opened[0].body, ok: false, code: "USED" });
       expect((await fetchDownload(attempt.body.ref, opened[0].cookie!, { method: "HEAD" })).status).toBe(200);
     }
-    // The one stored session is the winner's, and it downloads.
+    // The one stored session is the winner's (under the key of links sent once), and it downloads.
     const row = await linkRow(token);
-    expect(Buffer.from(row.session_hash).equals(sha256(secretOf(opened[0].cookie!)))).toBe(true);
+    expect(Buffer.from(row.session_hash).equals(onceKey("session", sha256(secretOf(opened[0].cookie!))))).toBe(true);
     const whole = await fetchDownload(row.ref, opened[0].cookie!);
     expect(createHash("sha256").update(Buffer.from(await whole.arrayBuffer())).digest("hex")).toBe(files[BRIDGE].sha256);
   });
@@ -445,7 +504,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     const { token } = await issued(allowed);
     // Revocation, replacement and approval withdrawal all close the link row like this.
     const [opening] = await whileHeld(token, 1, () => [openLink(token)], async (tx) => {
-      await tx`UPDATE update_install_links SET revoked_at = now() WHERE token_hash = ${sha256(token)}`;
+      await tx`UPDATE update_install_links SET revoked_at = now() WHERE token_hash IN (${sha256(token)}, ${keyOf(token)})`;
     });
     expect(opening).toMatchObject({ status: 410, body: { ok: false, code: "GONE" }, setCookie: null });
     expect(await linkRow(token)).toMatchObject({ exchanged_at: null, session_hash: null });
@@ -463,11 +522,11 @@ describe.skipIf(!url)("private install links on Postgres", () => {
   // An opening that waits for the link row is judged by the time and state when it gets the row.
   it("does not open a link that expired while the opening waited for it", async () => {
     const expiring = await issued(await application(true));
-    await sql`UPDATE update_install_links SET expires_at = now() + interval '2 seconds' WHERE token_hash = ${sha256(expiring.token)}`;
+    await sql`UPDATE update_install_links SET expires_at = now() + interval '2 seconds' WHERE token_hash IN (${sha256(expiring.token)}, ${keyOf(expiring.token)})`;
     const [late] = await whileHeld(expiring.token, 1, () => [openLink(expiring.token)], async (tx) => {
       await tx`
         SELECT pg_sleep(extract(epoch FROM expires_at - clock_timestamp())::float8 + 0.2)
-        FROM update_install_links WHERE token_hash = ${sha256(expiring.token)}
+        FROM update_install_links WHERE token_hash IN (${sha256(expiring.token)}, ${keyOf(expiring.token)})
       `;
     });
     expect(late).toMatchObject({ status: 410, body: { ok: false, code: "GONE" }, setCookie: null });
@@ -476,7 +535,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
 
   it("sets the cookie for what is left once the opening got the link row, not from when it began", async () => {
     const waiting = await issued(await application(true));
-    await sql`UPDATE update_install_links SET expires_at = now() + interval '10 seconds' WHERE token_hash = ${sha256(waiting.token)}`;
+    await sql`UPDATE update_install_links SET expires_at = now() + interval '10 seconds' WHERE token_hash IN (${sha256(waiting.token)}, ${keyOf(waiting.token)})`;
     const [opened] = await whileHeld(waiting.token, 1, () => [openLink(waiting.token)], async (tx) => {
       await tx`SELECT pg_sleep(4)`;
     });
@@ -521,6 +580,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
       build: link.build,
       byteLength: SIZE,
       expiresAt: link.expiresAt,
+      singleTransfer: true,
     });
     for (const secret of [token, secretOf(cookie)]) expect(JSON.stringify(named)).not.toContain(secret);
     const head = await fetchDownload(named.ref, cookie, { method: "HEAD" });
@@ -529,15 +589,16 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     const etag = head.headers.get("etag")!;
     const whole = Buffer.from(await (await fetchDownload(named.ref, cookie)).arrayBuffer());
     expect(createHash("sha256").update(whole).digest("hex")).toBe(files[BRIDGE].sha256);
+    // Sent once: its resume is refused like any later request.
     const resumed = await fetchDownload(named.ref, cookie, { headers: { range: "bytes=4321-", "if-range": etag } });
-    expect(resumed.status).toBe(206);
-    expect(Buffer.from(await resumed.arrayBuffer()).equals(whole.subarray(4321))).toBe(true);
+    expect(resumed.status).toBe(410);
+    expect(await resumed.text()).toContain("you need a new link");
 
     // The retry made no session and moved nothing; HEAD counted no download.
     const after = await linkRow(token);
     expect(Buffer.from(after.session_hash).equals(Buffer.from(before.session_hash))).toBe(true);
     expect(after.exchanged_at).toEqual(before.exchanged_at);
-    expect(after.download_count).toBe(2);
+    expect(after.download_count).toBe(1);
   });
 
   it("keeps a lost cookie lost: without the session the HEAD is 404 and only a new link opens", async () => {
@@ -600,9 +661,10 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     expect((await openLink(token)).body).toEqual({ ...retried.body, ok: false, code: "USED" });
   });
 
-  it("resumes with the session cookie until the link expires, and opens nothing with less than a second left", async () => {
+  it("resumes a link issued before 0009 with the session cookie until it expires, and opens nothing with less than a second left", async () => {
     const allowed = await application(true);
     const { token } = await issued(allowed);
+    await legacy(token);
     const { cookie, body } = await openLink(token);
     const ref: string = body.ref;
     const etag = (await fetchDownload(ref, cookie!, { method: "HEAD" })).headers.get("etag")!;
@@ -622,7 +684,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
 
     await sql`
       UPDATE update_install_links SET created_at = now() - interval '73 hours', expires_at = now() - interval '1 second'
-      WHERE token_hash = ${sha256(token)}
+      WHERE token_hash IN (${sha256(token)}, ${keyOf(token)})
     `;
     const resume = await fetchDownload(ref, cookie!, { headers: { range: "bytes=10-", "if-range": etag } });
     expect(resume.status).toBe(410);
@@ -635,7 +697,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
 
     // Open by the database's clock, but under a second left: no cookie, and the token stays unused.
     const late = await issued(await application(true));
-    await sql`UPDATE update_install_links SET expires_at = now() + interval '500 milliseconds' WHERE token_hash = ${sha256(late.token)}`;
+    await sql`UPDATE update_install_links SET expires_at = now() + interval '500 milliseconds' WHERE token_hash IN (${sha256(late.token)}, ${keyOf(late.token)})`;
     expect(await openLink(late.token)).toMatchObject({ status: 410, body: { ok: false, code: "GONE" }, setCookie: null });
     expect(await linkRow(late.token)).toMatchObject({ exchanged_at: null, session_hash: null });
   });
@@ -712,7 +774,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     expect(await statusOf(third.token)).toBe(200);
     await sql`
       UPDATE update_install_links SET created_at = now() - interval '73 hours', expires_at = now() - interval '1 hour'
-      WHERE token_hash = ${createHash("sha256").update(third.token).digest()}
+      WHERE token_hash IN (${sha256(third.token)}, ${keyOf(third.token)})
     `;
     expect(await statusOf(third.token)).toBe(410);
     expect((await downloadWith(third.token, { method: "HEAD" })).status).toBe(410);
@@ -743,6 +805,337 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     expect(await statusOf((await issued(allowed)).token)).toBe(200);
   });
 
+  it("opens a new link only from the button: a page from before (as it loads) and HEAD use nothing", async () => {
+    const { token } = await issued(await application(true));
+    const row = await linkRow(token);
+    expect(row).toMatchObject({ single_transfer: true, transfer_started_at: null, exchanged_at: null });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(await openFromOldPage(token)).toEqual({ status: 409, body: { ok: false, code: "BUTTON_REQUIRED" }, setCookie: null });
+    }
+    const head = await fetchDownload(row.ref, "", { method: "HEAD" });
+    expect(head.status).toBe(404);
+    expect(await linkRow(token)).toMatchObject({ exchanged_at: null, session_hash: null, download_count: 0 });
+
+    const opened = await openLink(token);
+    expect(opened.status).toBe(200);
+    expect(opened.body).toMatchObject({ ok: true, ref: row.ref, singleTransfer: true });
+    // Pressed, the link is used: also for a page from before.
+    expect((await openFromOldPage(token)).body).toMatchObject({ ok: false, code: "USED", ref: row.ref });
+  });
+
+  it("sends a new link's package once, whole: HEAD, 304 and a refused range keep it, later requests get nothing", async () => {
+    const { token } = await issued(await application(true));
+    const { cookie, body } = await openLink(token);
+    const ref: string = body.ref;
+    const head = await fetchDownload(ref, cookie!, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("accept-ranges")).toBe("none");
+    const etag = head.headers.get("etag")!;
+    expect((await fetchDownload(ref, cookie!, { headers: { "if-none-match": etag } })).status).toBe(304);
+    const outside = await fetchDownload(ref, cookie!, { headers: { range: `bytes=${SIZE}-` } });
+    expect(outside.status).toBe(416);
+    await outside.arrayBuffer();
+    expect(await linkRow(token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+
+    // A browser's ranged request gets the whole file: a part of it installs nothing.
+    const whole = await fetchDownload(ref, cookie!, { headers: { range: "bytes=1000-", "if-range": etag } });
+    expect(whole.status).toBe(200);
+    expect(whole.headers.get("accept-ranges")).toBe("none");
+    expect(whole.headers.has("content-range")).toBe(false);
+    const bytes = Buffer.from(await whole.arrayBuffer());
+    expect(bytes.length).toBe(SIZE);
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(files[BRIDGE].sha256);
+    const taken = await linkRow(token);
+    expect(taken.transfer_started_at).not.toBeNull();
+    expect(taken.download_count).toBe(1);
+
+    // The same browser's second download and its resume, and a HEAD: refused, the cookie cleared.
+    for (const headers of [{}, { range: "bytes=1000-", "if-range": etag }] as Record<string, string>[]) {
+      const again = await fetchDownload(ref, cookie!, { headers });
+      expect(again.status).toBe(410);
+      expect(again.headers.get("set-cookie")).toContain("Max-Age=0");
+      expect(await again.text()).toContain("you need a new link");
+    }
+    expect((await fetchDownload(ref, cookie!, { method: "HEAD" })).status).toBe(410);
+    // The button pressed in another browser: used, without a session.
+    const elsewhere = await postSession(token);
+    expect(elsewhere.status).toBe(410);
+    expect(elsewhere.headers.has("set-cookie")).toBe(false);
+    await elsewhere.arrayBuffer();
+    expect((await linkRow(token)).download_count).toBe(1);
+  });
+
+  it("sends a new link's package to one of two downloads started at once with the same session", async () => {
+    const { token } = await issued(await application(true));
+    const { cookie, body } = await openLink(token);
+    const download = async () => {
+      const response = await fetchDownload(body.ref, cookie!);
+      return { status: response.status, bytes: Buffer.from(await response.arrayBuffer()) };
+    };
+    // Both have their first chunk ready and wait for the link row to take the transfer.
+    const answers = await whileHeld(token, 2, () => [download(), download()]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([200, 410]);
+    const sent = answers.find((answer) => answer.status === 200)!;
+    expect(createHash("sha256").update(sent.bytes).digest("hex")).toBe(files[BRIDGE].sha256);
+    const refused = answers.find((answer) => answer.status === 410)!;
+    expect(refused.bytes.toString("utf8")).toContain("you need a new link");
+    expect(refused.bytes.length).toBeLessThan(2000);
+    expect((await linkRow(token)).download_count).toBe(1);
+  });
+
+  it("sends no byte of a new link closed while its first chunk was prepared, or whose transfer can not be recorded", async () => {
+    const asText = (response: Response) => response.text().then((text) => ({ status: response.status, text }));
+    // Revoked (as replacement and withdrawal close the link row), or the approval withdrawn alone.
+    const revokedApplication = await application(true);
+    const revoked = await issued(revokedApplication);
+    const revokedSession = await openLink(revoked.token);
+    const [closed] = await whileHeld(revoked.token, 1, () => [fetchDownload(revokedSession.body.ref, revokedSession.cookie!).then(asText)], async (tx) => {
+      await tx`UPDATE update_install_links SET revoked_at = now() WHERE token_hash IN (${sha256(revoked.token)}, ${keyOf(revoked.token)})`;
+    });
+    const withdrawnApplication = await application(true);
+    const withdrawn = await issued(withdrawnApplication);
+    const withdrawnSession = await openLink(withdrawn.token);
+    const [unapproved] = await whileHeld(withdrawn.token, 1, () => [fetchDownload(withdrawnSession.body.ref, withdrawnSession.cookie!).then(asText)], async (tx) => {
+      await tx`UPDATE access_applications SET updates_approved = false WHERE id = ${withdrawnApplication}::bigint`;
+    });
+    for (const [answer, token] of [
+      [closed, revoked.token],
+      [unapproved, withdrawn.token],
+    ] as const) {
+      expect(answer.status).toBe(410);
+      expect(answer.text).toContain("This install link can't be used");
+      expect(await linkRow(token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+    }
+
+    // The database fails as the transfer is taken: 503 without a byte, and the transfer is still there.
+    const { token } = await issued(await application(true));
+    const { cookie, body } = await openLink(token);
+    const links = createInstallLinkStore(sql);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const down = (): Promise<TransferOutcome> => Promise.reject(Object.assign(new Error("down"), { code: "ECONNRESET" }));
+      const failed = await downloadWithStore({ ...links, startTransfer: down }, body.ref, secretOf(cookie!));
+      expect(failed.status).toBe(503);
+      expect(failed.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+      expect((await failed.arrayBuffer()).byteLength).toBeLessThan(2000);
+      expect(JSON.stringify(errors.mock.calls)).not.toContain(token);
+    } finally {
+      errors.mockRestore();
+    }
+    expect(await linkRow(token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+    expect(await statusOf(token)).toBe(200);
+  });
+
+  it("judges a transfer by the clock once it is taken: a link that expired while it waited sends nothing", async () => {
+    const { token } = await issued(await application(true));
+    const { cookie, body } = await openLink(token);
+    await sql`UPDATE update_install_links SET expires_at = now() + interval '2 seconds' WHERE token_hash IN (${sha256(token)}, ${keyOf(token)})`;
+    const [late] = await whileHeld(token, 1, () => [fetchDownload(body.ref, cookie!).then(async (response) => ({ status: response.status, text: await response.text() }))], async (tx) => {
+      await tx`
+        SELECT pg_sleep(extract(epoch FROM expires_at - clock_timestamp())::float8 + 0.2)
+        FROM update_install_links WHERE token_hash IN (${sha256(token)}, ${keyOf(token)})
+      `;
+    });
+    expect(late.status).toBe(410);
+    expect(late.text).toContain("This install link can't be used");
+    expect(await linkRow(token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+  });
+
+  it("takes nothing for a download whose client went away while it waited, so the link still sends once", async () => {
+    const { token } = await issued(await application(true));
+    const { cookie, body } = await openLink(token);
+    const client = new AbortController();
+    const before = clientsGone;
+    const [answer] = await whileHeld(
+      token,
+      1,
+      () => [fetchDownload(body.ref, cookie!, { signal: client.signal }).then((response) => response.status, () => "aborted" as const)],
+      async () => {
+        client.abort();
+        // The server sees the connection close while the request still waits for the link row.
+        for (let tries = 0; clientsGone === before; tries++) {
+          if (tries > 400) throw new Error("the server never saw the client go away");
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      },
+    );
+    expect(answer).toBe("aborted");
+    // Committed or not, the request's transaction has ended once the row can be locked here again.
+    await sql.begin(async (tx) => {
+      await tx`SELECT 1 FROM update_install_links WHERE token_hash IN (${sha256(token)}, ${keyOf(token)}) FOR UPDATE`;
+    });
+    expect(await linkRow(token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+    const whole = await fetchDownload(body.ref, cookie!);
+    expect(whole.status).toBe(200);
+    expect(createHash("sha256").update(Buffer.from(await whole.arrayBuffer())).digest("hex")).toBe(files[BRIDGE].sha256);
+  });
+
+  it("keeps links sent once out of reach of versions before 0009, which look links up by the plain SHA-256", async () => {
+    // What every earlier version asks (7fd0047 and before): a link by its token's SHA-256 to open it, and by
+    // its session secret's SHA-256 to download. After a rollback it finds no link sent once: they open nothing
+    // there (404) instead of opening as the page loads and downloading again.
+    const earlierFinds = async (column: "token_hash" | "session_hash", secret: string) =>
+      (await sql`SELECT 1 FROM update_install_links WHERE ${sql(column)} = ${sha256(secret)}`).length;
+    const once = await issued(await application(true));
+    const older = await issued(await application(true));
+    await legacy(older.token);
+    expect([await earlierFinds("token_hash", once.token), await earlierFinds("token_hash", older.token)]).toEqual([0, 1]);
+    const onceSession = await openLink(once.token);
+    const olderSession = await openLink(older.token);
+    expect(onceSession.status).toBe(200);
+    expect([
+      await earlierFinds("session_hash", secretOf(onceSession.cookie!)),
+      await earlierFinds("session_hash", secretOf(olderSession.cookie!)),
+    ]).toEqual([0, 1]);
+    // Back on this version, both work by their own rules.
+    expect(await statusOf(once.token)).toBe(200);
+    expect(await statusOf(once.token)).toBe(410);
+    expect(await statusOf(older.token)).toBe(200);
+    expect(await statusOf(older.token)).toBe(200);
+  });
+
+  it("needs a new link for a browser whose cookie an earlier version cleared during a rollback", async () => {
+    const allowed = await application(true);
+    const opened = await issued(allowed);
+    const session = await openLink(opened.token);
+    const ref: string = session.body.ref;
+    // During a rollback this browser reloads the page or downloads: the earlier version finds no such session
+    // (7fd0047: 404 with `Set-Cookie: …; Max-Age=0`) and the browser drops the cookie. A link nobody opened yet
+    // is only looked up by its token there, which finds nothing and uses nothing.
+    const untouched = await issued(await application(true));
+
+    // Back on this version: without the cookie the download is refused, and the used token makes no new session.
+    const head = await fetchDownload(ref, "", { method: "HEAD" });
+    expect(head.status).toBe(404);
+    const again = await postSession(opened.token);
+    expect(again.status).toBe(410);
+    expect(again.headers.has("set-cookie")).toBe(false);
+    expect(await again.json()).toMatchObject({ ok: false, code: "USED", ref });
+    expect(await linkRow(opened.token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+    // A new link is what helps; the link nobody opened works as it is.
+    const replacement = await issued(allowed);
+    expect(await statusOf(replacement.token)).toBe(200);
+    expect(await statusOf(untouched.token)).toBe(200);
+  });
+
+  describe("and approval mails", () => {
+    /** The approval mail of `applicationId`'s current approval: waiting, or (`started`) already handed over. */
+    const approvalMail = async (applicationId: string, { started = false } = {}) => {
+      const [row] = await sql<{ id: string }[]>`
+        INSERT INTO approval_mails (application_id, generation, trigger)
+        SELECT id, updates_generation, 'approval' FROM access_applications WHERE id = ${applicationId}::bigint
+        RETURNING id::text AS id
+      `;
+      if (started) {
+        await sql`
+          UPDATE approval_mails SET state = 'sending', attempts = 1, claimed_at = now(), send_started_at = now()
+          WHERE id = ${row.id}::bigint
+        `;
+      }
+      return row.id;
+    };
+    const mailRow = async (mailId: string) => {
+      const [row] = await sql`SELECT state, error_code, attempts, send_started_at FROM approval_mails WHERE id = ${mailId}::bigint`;
+      return row;
+    };
+    const openLinks = async (applicationId: string) => {
+      const [{ count }] = await sql<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM update_install_links
+        WHERE application_id = ${applicationId}::bigint AND revoked_at IS NULL AND expires_at > now()
+      `;
+      return count;
+    };
+    // In place of Gmail: records each mail it is asked to send.
+    const sent: string[] = [];
+    const services = (pause?: () => Promise<void>): ApprovalMailServices => {
+      const store = createApprovalMailStore(sql);
+      return {
+        // `pause` runs between the attempt's new link and its "about to send", as an operator could act there.
+        store: pause ? { ...store, markSending: async (claim) => (await pause(), store.markSending(claim)) } : store,
+        sender: {
+          authorize: async () => ({
+            ok: true,
+            send: async (to: string) => {
+              sent.push(to);
+              return { outcome: "accepted", messageId: "synthetic" };
+            },
+          }),
+        },
+        origin,
+        newToken: () => {
+          const token = randomBytes(32).toString("base64url");
+          tokens.push(token);
+          return token;
+        },
+      };
+    };
+
+    it("cancels a mail not yet sent when the operator revokes the link, so no later run sends it", async () => {
+      const allowed = await application(true);
+      const mail = await approvalMail(allowed);
+      const revocations: unknown[] = [];
+      // The attempt issued its link; the operator revokes it before the attempt goes on.
+      await sendApprovalMail(mail, services(async () => void revocations.push(await revoke(allowed))));
+      expect(revocations).toEqual([{ status: 200, body: { ok: true, revoked: 1 } }]);
+      expect(sent).toEqual([]);
+      expect(await mailRow(mail)).toMatchObject({ state: "cancelled", error_code: "revoked_by_operator", send_started_at: null });
+      expect(await openLinks(allowed)).toBe(0);
+
+      // Long after, the run for mails left behind takes nothing up again: no mail, no new link.
+      await sql`UPDATE approval_mails SET created_at = now() - interval '1 hour', claimed_at = now() - interval '1 hour' WHERE id = ${mail}::bigint`;
+      expect(await sendLeftBehindApprovalMails(services())).toBe(0);
+      expect(sent).toEqual([]);
+      expect(await openLinks(allowed)).toBe(0);
+      expect(await mailRow(mail)).toMatchObject({ state: "cancelled", attempts: 1 });
+    });
+
+    it("cancels a mail whose attempt stopped after issuing its link, so the run for mails left behind sends nothing", async () => {
+      const allowed = await application(true);
+      const mail = await approvalMail(allowed);
+      // An attempt claims the mail and issues its link, then stops (its process ends) before it goes on.
+      const store = createApprovalMailStore(sql);
+      const claim = (await store.claim(mail))!;
+      const token = randomBytes(32).toString("base64url");
+      expect(await store.prepare(claim, { tokenHash: sha256(token), ttlSeconds: 3600 })).toMatchObject({ kind: "ready" });
+      expect(await openLinks(allowed)).toBe(1);
+
+      expect(await revoke(allowed)).toEqual({ status: 200, body: { ok: true, revoked: 1 } });
+      expect(await mailRow(mail)).toMatchObject({ state: "cancelled", error_code: "revoked_by_operator", send_started_at: null });
+      await sql`UPDATE approval_mails SET claimed_at = now() - interval '1 hour' WHERE id = ${mail}::bigint`;
+      expect(await sendLeftBehindApprovalMails(services())).toBe(0);
+      expect(sent).toEqual([]);
+      expect(await openLinks(allowed)).toBe(0);
+    });
+
+    it("cancels a waiting mail on revocation, and leaves one already handed over and other requests' mails", async () => {
+      const waiting = await application(true);
+      const queued = await approvalMail(waiting);
+      const handedOver = await application(true);
+      const started = await approvalMail(handedOver, { started: true });
+      const other = await application(true);
+      const untouched = await approvalMail(other);
+      expect(await revoke(waiting)).toEqual({ status: 200, body: { ok: true, revoked: 0 } });
+      expect(await revoke(handedOver)).toEqual({ status: 200, body: { ok: true, revoked: 0 } });
+      expect(await mailRow(queued)).toMatchObject({ state: "cancelled", error_code: "revoked_by_operator" });
+      // It may have gone out: what it carries is closed, and its answer is still recorded on it.
+      expect(await mailRow(started)).toMatchObject({ state: "sending", error_code: null });
+      expect(await mailRow(untouched)).toMatchObject({ state: "queued", error_code: null });
+      expect(await sendLeftBehindApprovalMails(services())).toBe(0);
+      expect(sent).toEqual([]);
+    });
+
+    it("keeps the operator's new link when an attempt that issued one before goes on", async () => {
+      const allowed = await application(true);
+      const mail = await approvalMail(allowed);
+      let manual: { token: string } | null = null;
+      await sendApprovalMail(mail, services(async () => void (manual = await issued(allowed))));
+      expect(sent).toEqual([]);
+      expect(await mailRow(mail)).toMatchObject({ state: "cancelled", error_code: "replaced_by_operator_link" });
+      expect(await openLinks(allowed)).toBe(1);
+      expect(await statusOf(manual!.token)).toBe(200);
+    });
+  });
+
   it("serves a published installer, and closes its links when it is rolled back or withdrawn", async () => {
     const allowed = await application(true);
     const bridgeLink = await issued(allowed);
@@ -751,6 +1144,8 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     await expect(discardPackage(sql, BRIDGE)).rejects.toThrow(/is the installer/);
     await setInstaller(sql, null);
     expect(await issue(allowed)).toEqual({ status: 409, body: { ok: false, code: "NO_INSTALLER" } });
+    // Two tabs that each download and resume: links issued before 0009.
+    await legacy(bridgeLink.token);
     const tab24 = await openLink(bridgeLink.token);
     expect(await statusOf(bridgeLink.token)).toBe(200);
     await expect(discardPackage(sql, BRIDGE)).rejects.toThrow(/handed out by install links/);
@@ -761,6 +1156,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     const other = await application(true);
     const newer = await issued(other);
     expect(newer.link).toMatchObject({ build: BRIDGE + 1, version: "2.7.1" });
+    await legacy(newer.token);
 
     // Two tabs in one browser: build 24's link, then build 25's. One cookie jar holds both, and each
     // tab's download, HEAD and resume get the build that tab shows.
@@ -802,9 +1198,21 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     await setInstaller(sql, BRIDGE);
     const last = await issued(allowed);
     expect(await statusOf(last.token)).toBe(200);
-    const withdrawn = await tool("withdraw", "--build", String(BRIDGE));
-    expect(withdrawn).toMatchObject({ code: 0 });
-    expect(withdrawn.stdout).toContain("It was the installer");
+    // A download of a link sent once has its first chunk ready as the release tool withdraws the build: the
+    // transfer waits for the package row, sees the withdrawal once it is committed, and sends nothing.
+    const racer = await issued(await application(true));
+    const racing = await openLink(racer.token);
+    let withdrawal: unknown = null;
+    const [raced] = await whileHeld(
+      async (tx) => (withdrawal = await withdrawPackage({ begin: (run: (inner: typeof tx) => unknown) => run(tx) }, BRIDGE)),
+      1,
+      () => [fetchDownload(racing.body.ref, racing.cookie!).then(async (response) => ({ status: response.status, text: await response.text() }))],
+    );
+    expect(withdrawal).toEqual({ changed: true, installerCleared: true });
+    expect(raced.status).toBe(410);
+    expect(raced.text).toContain("This install link can't be used");
+    expect(await linkRow(racer.token)).toMatchObject({ transfer_started_at: null, download_count: 0 });
+    expect((await tool("withdraw", "--build", String(BRIDGE))).stdout).toContain("Already withdrawn.");
     expect(await statusOf(last.token)).toBe(410);
     expect(await issue(allowed)).toEqual({ status: 409, body: { ok: false, code: "NO_INSTALLER" } });
     const events = await sql`SELECT action, build, previous_build FROM update_channel_events WHERE action = 'installer' ORDER BY id`;
@@ -818,7 +1226,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
     ]);
   });
 
-  it("migrates links issued before they opened once: each opens once more, and their old cookies open nothing", async () => {
+  it("migrates links issued before they opened once, then before the button: each keeps its rules", async () => {
     const legacySchema = `${schema}_legacy`;
     await admin`CREATE SCHEMA ${admin(legacySchema)}`;
     const legacy = postgres(url!, {
@@ -828,10 +1236,12 @@ describe.skipIf(!url)("private install links on Postgres", () => {
       connection: { options: `-c search_path=${legacySchema}` },
     });
     const upTo0007 = await mkdtemp(join(tmpdir(), "nokka-migrations-0007-"));
+    const upTo0008 = await mkdtemp(join(tmpdir(), "nokka-migrations-0008-"));
     try {
       const all = join(process.cwd(), "db/migrations");
-      for (const name of (await readdir(all)).filter((file) => file.endsWith(".sql") && file < "0008")) {
-        await copyFile(join(all, name), join(upTo0007, name));
+      for (const name of (await readdir(all)).filter((file) => file.endsWith(".sql") && file < "0009")) {
+        if (name < "0008") await copyFile(join(all, name), join(upTo0007, name));
+        await copyFile(join(all, name), join(upTo0008, name));
       }
       expect((await applyMigrations(legacy, upTo0007)).at(-1)).toBe("0007_update_install_links.sql");
       // A verified one-chunk package and an allowed request as rows, and two links as the earlier code left
@@ -863,26 +1273,52 @@ describe.skipIf(!url)("private install links on Postgres", () => {
         VALUES (${sha256(revoked)}, ${randomUUID()}::uuid, ${applicationId}::bigint, ${BRIDGE}, now() + interval '72 hours', now())
       `;
 
-      expect(await applyMigrations(legacy)).toEqual(["0008_install_link_single_use.sql"]);
+      expect(await applyMigrations(legacy, upTo0008)).toEqual(["0008_install_link_single_use.sql"]);
       const rows = await legacy`SELECT exchanged_at, session_hash FROM update_install_links`;
       expect(rows).toEqual([
         { exchanged_at: null, session_hash: null },
         { exchanged_at: null, session_hash: null },
       ]);
+      // Another request's link that a browser opened (from the page, as it loaded) while 0008 was current.
+      const [{ id: openedBy0008 }] = await legacy<{ id: string }[]>`
+        INSERT INTO access_applications (name, email, updates_approved)
+        VALUES ('QA install link', ${`nokka-install-link-qa-${id}-legacy-0008@example.com`}, true)
+        RETURNING id::text AS id
+      `;
+      const session0008 = randomBytes(32).toString("base64url");
+      const ref0008 = randomUUID();
+      await legacy`
+        INSERT INTO update_install_links (token_hash, ref, application_id, build, expires_at, exchanged_at, session_hash)
+        VALUES (${randomBytes(32)}, ${ref0008}::uuid, ${openedBy0008}::bigint, ${BRIDGE}, now() + interval '72 hours',
+                now(), ${sha256(session0008)})
+      `;
+
+      // 0009 while the previous version still runs: every link there keeps its rules.
+      expect(await applyMigrations(legacy)).toEqual(["0009_approval_mail_and_install_button.sql"]);
+      const migrated = await legacy`SELECT single_transfer, transfer_started_at FROM update_install_links`;
+      expect(migrated).toEqual(Array(3).fill({ single_transfer: false, transfer_started_at: null }));
 
       const links = createInstallLinkStore(legacy);
       const download = createInstallDownloadHandlers({ getLinkStore: () => links, getStore: () => createPackageStore(legacy) });
-      const get = (secret: string) =>
+      const get = (secret: string, at = ref, headers: Record<string, string> = {}) =>
         download.GET(
-          new Request(`${origin}/api/updates/v1/install/${ref}/Nokka.dmg`, { headers: { cookie: cookieFor(ref, secret) } }),
-          { params: Promise.resolve({ ref }) },
+          new Request(`${origin}/api/updates/v1/install/${at}/Nokka.dmg`, { headers: { cookie: cookieFor(at, secret), ...headers } }),
+          { params: Promise.resolve({ ref: at }) },
         );
+      // The session opened under 0008 still downloads and resumes, as often as it needs, until the link closes.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const resumed = await get(session0008, ref0008, { range: "bytes=100-" });
+        expect(resumed.status).toBe(206);
+        expect(resumed.headers.get("accept-ranges")).toBe("bytes");
+        expect(Buffer.from(await resumed.arrayBuffer()).equals(bytes.subarray(100))).toBe(true);
+      }
       // The cookie set before the migration is refused and cleared; opening the link again works once.
       const old = await get(open);
       expect(old.status).toBe(404);
       expect(old.headers.get("set-cookie")).toContain("Max-Age=0");
       await old.arrayBuffer();
-      const session = sessionWith(links);
+      // Opened by a page from before the button (the token alone), as before.
+      const session = sessionWith(links, undefined, { button: false });
       const opened = await session(open);
       expect(opened.status).toBe(200);
       const secret = secretOf(opened.headers.get("set-cookie")!.split(";")[0]);
@@ -897,6 +1333,7 @@ describe.skipIf(!url)("private install links on Postgres", () => {
       await legacy.end();
       await admin`DROP SCHEMA IF EXISTS ${admin(legacySchema)} CASCADE`;
       await rm(upTo0007, { recursive: true, force: true });
+      await rm(upTo0008, { recursive: true, force: true });
     }
   });
 

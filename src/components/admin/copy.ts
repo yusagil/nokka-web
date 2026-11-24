@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from "@/lib/admin/contracts";
+import type { ApplicationStatus, ApprovalMailStatus, CodeMail } from "@/lib/admin/contracts";
 
 // The inbox is for the one operator and is Korean only, so its copy lives here rather than in the
 // public en/ko dictionaries.
@@ -8,6 +8,40 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   hold: "보류",
   contacted: "안내완료",
 };
+
+export const APPROVAL_MAIL_STATUS_LABEL: Record<ApprovalMailStatus, string> = {
+  queued: "발송 대기",
+  sending: "보내는 중",
+  accepted: "메일 서비스가 접수함",
+  rejected: "메일 서비스가 거절함(보내지 않음)",
+  uncertain: "발송 여부 확인 불가",
+  failed: "보내지 못함",
+  interrupted: "보내기 전에 중단됨",
+  cancelled: "취소됨",
+};
+
+export const CODE_MAIL_STATUS_LABEL: Record<CodeMail["status"], string> = {
+  pending: "처리 결과 기록 전",
+  accepted: "메일 서비스가 접수함",
+  rejected: "메일 서비스가 거절함",
+  uncertain: "발송 여부 확인 불가",
+};
+
+/** Why an approval mail was not sent (or not known to be), by its error code. Provider codes are shown as is. */
+const APPROVAL_MAIL_REASON: Record<string, string> = {
+  no_installer: "전달할 설치 파일이 지정되지 않았습니다",
+  installer_withdrawn: "링크를 만든 뒤 설치 파일이 철회되었습니다. 설치 파일을 다시 지정한 뒤 보내세요",
+  mail_not_configured: "메일 발송 설정이 없습니다",
+  approval_withdrawn: "업데이트 허용을 껐습니다",
+  revoked_by_operator: "설치 링크를 회수했습니다",
+  link_revoked: "설치 링크를 회수했습니다",
+  replaced_by_operator_link: "직접 만든 설치 링크로 대체했습니다",
+  superseded: "새 승인 메일로 대체했습니다",
+  result_not_recorded: "메일 서비스의 응답이 기록되지 않았습니다",
+  internal_error: "서버 오류로 멈췄습니다",
+};
+
+export const approvalMailReason = (code: string) => APPROVAL_MAIL_REASON[code] ?? `메일 서비스 코드 ${code}`;
 
 export const copy = {
   title: "신청함",
@@ -51,10 +85,55 @@ export const copy = {
   updatesLegend: "앱 업데이트",
   updatesLabel: "업데이트 허용",
   updatesHint:
-    "켜면 이 이메일로 앱에서 등록 코드를 받아 Mac 한 대를 등록할 수 있습니다. 켜는 것만으로 메일이 가지는 않습니다.",
+    "켜고 저장하면 설치 링크가 든 승인 메일이 이 이메일로 한 번 자동 발송됩니다. 이 이메일로 앱에서 등록 코드를 받아 Mac 한 대를 등록할 수 있고, 코드 메일은 신청자가 앱에서 요청할 때 따로 갑니다.",
   updatesRevokeWarning:
-    "끄고 저장하면 등록된 Mac의 업데이트와 아직 쓰지 않은 코드가 바로 중단됩니다. 다시 켜도 새 코드로 다시 등록해야 합니다.",
+    "끄고 저장하면 등록된 Mac의 업데이트, 아직 쓰지 않은 코드, 열린 설치 링크와 아직 보내지 않은 승인 메일이 바로 중단됩니다. 다시 켜면 새 링크가 든 승인 메일이 다시 가고, Mac은 새 코드로 다시 등록해야 합니다.",
+  savedWithMail: (status: string) => `저장했습니다. 승인 메일: ${status}`,
+  progressLegend: "진행 상황",
+  progressHint: "‘안내완료’는 직접 기록하는 처리 상태이고, 아래 승인 메일 결과와는 별개입니다. 최신 결과는 목록을 다시 불러오면 보입니다.",
+  macRegistered: "등록된 Mac: 있음",
+  macNotRegistered: "등록된 Mac: 없음",
+  codeMailNone: "최근 코드 메일: 기록 없음",
+  codeMail: (when: string, status: string) => `최근 코드 메일: ${when} 요청 · ${status}`,
+  approvalMailLegend: "승인 메일",
+  approvalMailNone:
+    "보낸 승인 메일이 없습니다(승인 메일 자동 발송 전에 허용한 신청). 보내면 다운로드 1회짜리 새 설치 링크가 든 안내 메일이 이 신청자에게 가고, 전에 전달한 링크는 막힙니다.",
+  approvalMailFirst: "새 설치 링크 메일 보내기",
+  approvalMailNewLink: "새 링크로 다시 보내기",
+  approvalMailNewLinkHint:
+    "링크가 만료됐거나, 받는 중에 끊겼거나, 신청자가 링크를 잃어버렸다면 다시 보내세요. 새 메일의 링크도 다운로드 1회만 되고, 전 링크는 막힙니다.",
+  linkStateOpen: (until: string) => `메일의 설치 링크: 아직 받지 않음 · ${until}까지`,
+  linkStateDownloaded: "메일의 설치 링크: 이미 받기 시작함(다운로드 1회 사용)",
+  linkStateExpired: (until: string) => `메일의 설치 링크: ${until}에 만료됨`,
+  linkStateClosed: "메일의 설치 링크: 막힘(회수 또는 새 링크로 교체)",
+  approvalMailAuto: "자동 발송",
+  approvalMailManual: "직접 요청",
+  approvalMailEmpty: "없음",
+  approvalMailReasonLine: (reason: string) => `사유: ${reason}`,
+  approvalMailSend: "승인 메일 지금 보내기",
+  approvalMailResend: "승인 메일 다시 보내기",
+  approvalMailBusy: "보내는 중…",
+  approvalMailResendWarning:
+    "이미 신청자에게 갔을 수 있는 메일입니다. 다시 보내면 메일을 두 통 받을 수 있고, 새 링크가 만들어지는 즉시 이전 메일의 링크는 쓸 수 없습니다.",
+  approvalMailConfirm: "확인하고 다시 보내기",
+  approvalMailCancel: "취소",
+  approvalMailDone: (status: string) => `승인 메일: ${status}`,
+  approvalMailConflict: "그 사이 승인 메일 상태가 바뀌었습니다. 최신 내용을 불러온 뒤 다시 판단해 주세요.",
+  approvalMailInProgress: "승인 메일을 보내는 중입니다. 잠시 뒤 최신 내용을 불러와 주세요.",
+  approvalMailNotApproved: "업데이트 허용을 저장한 뒤에 보낼 수 있습니다. 목록을 다시 불러와 주세요.",
+  approvalMailFailed: "요청하지 못했습니다. 잠시 후 최신 내용을 불러와 확인해 주세요.",
   updatesApprovedBadge: "업데이트 허용",
+  /** Short state of an allowed request's approval mail, beside the badges of a closed card. */
+  mailBadge: {
+    none: "승인 메일 없음",
+    sending: "승인 메일 보내는 중",
+    accepted: "승인 메일 접수",
+    notSent: "승인 메일 안 감",
+    uncertain: "승인 메일 확인 불가",
+    expired: "설치 링크 만료",
+    downloaded: "설치 링크로 받음",
+    closed: "설치 링크 막힘",
+  },
   noChanges: "바뀐 내용이 없습니다.",
   saveFailed: "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   conflict:
@@ -67,9 +146,9 @@ export const copy = {
     "Gmail은 이 브라우저의 새 탭에, 메일 앱은 이 브라우저나 Mac에 연결된 앱에 초안을 엽니다. 어느 쪽도 자동으로 보내지 않습니다. 직접 보낸 뒤 상태를 안내완료로 바꿔 저장하세요.",
   installLinkLegend: "비공개 설치 링크",
   installLinkHint: (hours: number) =>
-    `이 신청자에게만 전달할 설치 파일 링크입니다. 만든 때부터 ${hours}시간 동안 쓸 수 있습니다. 링크는 한 번만 열 수 있고, 처음 연 브라우저에서만 받을 수 있습니다. 새로 만들면 이전 링크는 바로 막힙니다. 링크 주소는 만든 직후 이 화면에서만 볼 수 있습니다.`,
+    `승인 메일과 별도로 이 신청자에게 직접 전달할 때 쓰는 설치 파일 링크입니다. 만든 때부터 ${hours}시간 동안 쓸 수 있습니다. 링크를 열기만 해서는 쓰이지 않고, 페이지의 ‘설치 파일 받기’를 처음 누른 한 번만 받을 수 있습니다. 받는 중에 끊겼다는 연락을 받으면 새 링크를 만들어 전달하거나 승인 메일을 다시 보내세요. 새로 만들면 승인 메일에 든 링크를 포함한 이전 링크가 바로 막히고, 아직 보내지 않은 승인 메일은 취소됩니다. 링크 주소는 만든 직후 이 화면에서만 볼 수 있습니다.`,
   installLinkRevokeHint:
-    "회수하거나 새로 만들면 그 링크의 새 요청(이어 받기 포함)은 바로 거절됩니다. 이미 시작된 다운로드는 중간에 끊지 않으므로 끝까지 받을 수 있습니다.",
+    "회수하거나 새로 만들면 그 링크의 새 요청은 바로 거절되고, 아직 보내지 않은 승인 메일도 취소됩니다. 이미 시작된 다운로드는 중간에 끊지 않으므로 끝까지 받을 수 있습니다.",
   installLinkIssue: "설치 링크 만들기",
   installLinkReissue: "새 링크 만들기",
   installLinkIssuing: "만드는 중…",
@@ -90,6 +169,7 @@ export const copy = {
   installLinkCompose: "메일 앱으로 링크 메일 작성",
   installLinkComposeHint:
     "먼저 메일 본문을 복사하세요. Gmail은 이 브라우저의 새 탭에, 메일 앱은 이 브라우저나 Mac에 연결된 앱에 받는 사람과 제목만 채운 초안을 엽니다. 링크는 작성 창 주소에 넣지 않으니 본문에 붙여 넣고, 직접 확인한 뒤 보내세요.",
+  installLinkReplacedByMail: "승인 메일로 새 링크가 나가 여기서 만든 링크는 막혔습니다. 이 링크와 그 본문은 더 이상 전달하지 마세요.",
   installLinkRevoked: "링크를 회수했습니다. 새 요청은 거절되며, 이미 시작된 다운로드는 끝까지 받을 수 있습니다.",
   installLinkNoneOpen: "열려 있는 링크가 없습니다.",
   installLinkNotApproved: "업데이트 허용을 저장한 뒤에 만들 수 있습니다. 목록을 다시 불러와 주세요.",
@@ -99,7 +179,7 @@ export const copy = {
   installLinkMailSubject: "Nokka 설치 링크 안내",
   installLinkMailBody: (name: string, url: string, until: string) =>
     `${name}님, 안녕하세요.\n\nNokka 업데이트가 승인되어 설치 파일 링크를 보내 드립니다.\n\n${url}\n\n` +
-    `이 링크는 한 번만 열 수 있습니다. 설치할 Mac에서 열어 주세요. 처음 연 브라우저에서 ${until}까지 받을 수 있습니다. 다른 사람과 공유하지 마세요.\n` +
+    `설치할 Mac에서 링크를 열고 ‘설치 파일 받기’를 누르면 바로 받기 시작합니다. 이 버튼은 한 번만 쓸 수 있고, 링크는 ${until}까지 쓸 수 있습니다. 받는 중에 끊기면 이 메일에 회신해 새 링크를 요청해 주세요. 다른 사람과 공유하지 마세요.\n` +
     "설치한 뒤 Nokka 메뉴에서 ‘업데이트 확인…’을 선택하세요. 등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요. 등록한 Mac은 앱 안에서 다음 업데이트를 받을 수 있습니다.\n\nNokka 드림",
   mailSubject: "Nokka 사용 신청 관련 안내",
   mailBody: (name: string) =>

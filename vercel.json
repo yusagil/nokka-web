@@ -1,9 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/updates/v1/install/*/Nokka.dmg/route.ts": {
+      "supportsCancellation": true
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/application-digest",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/approval-mails",
+      "schedule": "30 0 * * *"
     }
   ]
 }

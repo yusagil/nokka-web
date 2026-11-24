@@ -1,11 +1,13 @@
-import type { Dictionary } from "@/dictionaries";
+import type { Dictionary, Locale } from "@/dictionaries";
 import ApplicationForm from "./ApplicationForm";
 
 interface ApplicationSectionProps {
   dict: Dictionary["apply"];
+  locale: Locale;
 }
 
-export default function ApplicationSection({ dict }: ApplicationSectionProps) {
+/** The steps stay above the form, so they are still there after the form turns into its confirmation. */
+export default function ApplicationSection({ dict, locale }: ApplicationSectionProps) {
   return (
     <section
       id="apply"
@@ -30,13 +32,29 @@ export default function ApplicationSection({ dict }: ApplicationSectionProps) {
         </h2>
         <p className="mt-4 text-pretty text-lg leading-relaxed text-fg-muted">{dict.intro}</p>
 
+        <div className="mt-8 text-left">
+          <h3 id="apply-steps-heading" className="text-base font-semibold text-fg">
+            {dict.stepsHeading}
+          </h3>
+          <ol
+            aria-labelledby="apply-steps-heading"
+            className="mt-3 list-decimal space-y-2 pl-6 marker:font-semibold marker:text-accent-text"
+          >
+            {dict.steps.map((step) => (
+              <li key={step} className="pl-1 text-pretty text-[15px] leading-relaxed text-fg-muted">
+                {step}
+              </li>
+            ))}
+          </ol>
+        </div>
+
         <noscript>
           <p className="mt-6 rounded-[10px] border border-line bg-surface p-4 text-[15px] text-fg-muted">
             {dict.noscript}
           </p>
         </noscript>
 
-        <ApplicationForm dict={dict.form} className="mt-10" />
+        <ApplicationForm dict={dict.form} locale={locale} className="mt-8" />
       </div>
     </section>
   );
