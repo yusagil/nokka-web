@@ -93,7 +93,7 @@ function readEnv(name: string): string | null {
 }
 
 /** Compares digests so neither the secret's content nor its length leaks through timing. */
-function isAuthorized(header: string | null, secret: string): boolean {
+export function isAuthorized(header: string | null, secret: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
   const given = createHash("sha256").update(header.slice("Bearer ".length)).digest();
   const expected = createHash("sha256").update(secret).digest();

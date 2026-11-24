@@ -209,15 +209,23 @@
   "apply": {
     "heading": "Request access",
     "intro": "Leave your name and email.",
+    "stepsHeading": "What happens next",
+    "steps": [
+      "The team reviews your request.",
+      "If it's approved, we email an install link to the address you entered.",
+      "After installing Nokka, request an update registration code in the app with the same email."
+    ],
     "noscript": "Turn on JavaScript in your browser to send a request.",
     "form": {
       "nameLabel": "Name",
       "emailLabel": "Email",
-      "purpose": "We ask for your name and email to receive your access request and to contact you about it.",
+      "purpose": "We ask for your name and email to review your request and to send installation and update instructions.",
       "submit": "Submit request",
       "submitting": "Submitting…",
       "doneHeading": "Your request has been received",
-      "doneBody": "Thank you.",
+      "doneBody": "The team will review it. If it's approved, we'll send an install link to the email you entered. There's no separate confirmation email.",
+      "doneExisting": "Already using Nokka? After approval, you can register this Mac from ‘업데이트 확인…’ (Check for Updates) in the app.",
+      "doneLink": "How update registration works",
       "errors": {
         "nameRequired": "Enter your name.",
         "nameTooLong": "Use 100 characters or fewer.",

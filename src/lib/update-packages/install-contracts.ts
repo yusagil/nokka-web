@@ -3,13 +3,16 @@
 // once, and the server answers with an HttpOnly cookie that the download sends. So the secret is never
 // in a request path, query string or referrer, the parts of a request that hosting logs record.
 // A link opens once: the first successful session consumes its secret, and the cookie carries a session
-// secret of its own, so the link's secret opens nothing after that.
+// secret of its own, so the link's secret opens nothing after that. Links issued since migration 0009 open only
+// from the page's button (loading the page, also in a mail scanner, uses nothing up) and send their package once.
 // Keep server-only imports (database, crypto, env) out of this file.
 
 /** The page a link opens: `${origin}/install#<token>`. */
 export const INSTALL_PAGE_PATH = "/install";
-/** POST `{ token }`: opens the link (once) and sets that link's download cookie. */
+/** POST `{ token, action: "download" }`: opens the link (once) and sets that link's download cookie. */
 export const INSTALL_SESSION_ENDPOINT = "/api/updates/v1/install/session";
+/** Sent only when the person pressed the page's button: without it, links issued since 0009 are not opened. */
+export const INSTALL_BUTTON_ACTION = "download";
 
 /** 32 random bytes, unpadded base64url. */
 export const INSTALL_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -25,7 +28,8 @@ export const installCookieName = (ref: string) => `__Secure-nokka-install-${ref}
 
 export const installLinkUrl = (origin: string, token: string) => `${origin}${INSTALL_PAGE_PATH}#${token}`;
 
-export type InstallSessionRequest = { token: string };
+/** `action` is required for links issued since 0009; links issued before also open with `{ token }` alone. */
+export type InstallSessionRequest = { token: string; action?: typeof INSTALL_BUTTON_ACTION };
 
 /** 200: the link was open and is now opened; its cookie is set for the link's remaining lifetime. */
 export type InstallSessionResult = {
@@ -36,6 +40,12 @@ export type InstallSessionResult = {
   build: number;
   byteLength: number;
   expiresAt: string;
+  /**
+   * Issued since 0009: its package is sent once, whole (the download takes the link's one transfer right
+   * before its first byte; every later request, a resume included, gets 410 `USED`). False for links issued
+   * before, which download and resume until they close.
+   */
+  singleTransfer: boolean;
 };
 
 export type InstallErrorCode =
@@ -45,6 +55,11 @@ export type InstallErrorCode =
   | "GONE"
   /** 410 as well: still open, but already opened once (by this or another browser); see InstallUsedFailure. */
   | "USED"
+  /**
+   * 409: the link opens only from the page's button (the request had no `action`, as pages from before 0009
+   * send). Nothing was used up; the current page opens it.
+   */
+  | "BUTTON_REQUIRED"
   | "INVALID_REQUEST"
   | "FORBIDDEN"
   | "UNSUPPORTED_MEDIA_TYPE"
@@ -58,8 +73,9 @@ export type InstallFailure = { ok: false; code: InstallErrorCode };
  * 410 `USED` names the link and what it serves, as the first 200 did: nothing secret, and nothing it opens.
  * The browser that opened the link holds its session cookie, so a page that lost the first answer (or was
  * refused because another tab of this browser opened the link first) checks `HEAD installDownloadPath(ref)`
- * with this browser's cookies: 200 means this browser can download and resume it; 404 means it holds no
- * session for this link (another browser opened it, or the cookie was lost too) and a new link is needed;
- * 410 means the link has closed since. A closed link answers a plain `GONE` without any of this.
+ * with this browser's cookies (a HEAD never takes a transfer): 200 means this browser can download it; 404
+ * means it holds no session for this link (another browser opened it, or the cookie was lost too) and a new
+ * link is needed; 410 means the link has closed since, or (`singleTransfer`) its one transfer has started.
+ * A closed link answers a plain `GONE` without any of this.
  */
 export type InstallUsedFailure = Omit<InstallSessionResult, "ok"> & { ok: false; code: "USED" };

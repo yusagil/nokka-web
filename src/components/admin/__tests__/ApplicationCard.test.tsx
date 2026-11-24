@@ -17,6 +17,9 @@ const item: AdminApplication = {
   lastContactedAt: null,
   updatedAt: "2026-11-19T12:30:00.000Z",
   updatesApproved: false,
+  macRegistered: false,
+  latestCodeMail: null,
+  approvalMail: null,
 };
 
 function reply(status: number, body: unknown) {

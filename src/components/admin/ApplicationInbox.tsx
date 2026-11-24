@@ -10,6 +10,7 @@ import {
 import { searchApplications, type ClientFailure } from "./api";
 import ApplicationCard from "./ApplicationCard";
 import { STATUS_LABEL, copy } from "./copy";
+import { mergeProgress } from "./progress";
 import SignOutButton from "./SignOutButton";
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
@@ -134,6 +135,14 @@ export default function ApplicationInbox() {
     if (leaves) focusListHeading.current = true;
   };
 
+  // An action's answer lands on the row as it is now (a save may have replaced it meanwhile).
+  const applyProgress = (itemId: string, read: AdminApplication) =>
+    setPage((prev) =>
+      prev?.ok
+        ? { ...prev, items: prev.items.map((item) => (item.id === itemId ? mergeProgress(item, read) : item)) }
+        : prev
+    );
+
   const filtered = query !== "" || filter !== "all";
   // Searching or filtering replaces the cards, so their unsaved edits would go with them.
   const unsavedNote = unsaved.size > 0 ? `${id}-unsaved` : undefined;
@@ -253,6 +262,7 @@ export default function ApplicationInbox() {
                   expanded={expanded === key}
                   onToggle={() => setExpanded((open) => (open === key ? null : key))}
                   onSaved={applySaved}
+                  onProgress={applyProgress}
                   onReload={reload}
                   onDirtyChange={trackUnsaved}
                 />

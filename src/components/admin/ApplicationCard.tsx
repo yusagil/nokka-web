@@ -11,9 +11,11 @@ import {
   type FieldError,
 } from "@/lib/admin/contracts";
 import { updateApplication } from "./api";
-import { STATUS_LABEL, copy } from "./copy";
+import ApprovalMailPanel, { ApprovalMailBadge } from "./ApprovalMailPanel";
+import { APPROVAL_MAIL_STATUS_LABEL, STATUS_LABEL, copy } from "./copy";
 import { composeGmail, composeMailto, formatDateTime } from "./format";
 import InstallLinkPanel from "./InstallLinkPanel";
+import { mergeProgress, type LinkLock } from "./progress";
 
 interface ApplicationCardProps {
   item: AdminApplication;
@@ -21,6 +23,11 @@ interface ApplicationCardProps {
   onToggle: () => void;
   /** `stillEditing`: the operator changed the form while the save was in flight, so it isn't clean. */
   onSaved: (item: AdminApplication, stillEditing: boolean) => void;
+  /**
+   * An action's answer (`read`) for request `id`, to merge into the list's row as it is when the answer lands
+   * (see mergeProgress). Without it the card merges into the item it rendered last.
+   */
+  onProgress?: (id: string, read: AdminApplication) => void;
   /** Reloads the list; resolves once the fresh items are in. */
   onReload: () => Promise<void>;
   /** Told whether this card holds edits that aren't saved yet. */
@@ -49,6 +56,7 @@ export default function ApplicationCard({
   expanded,
   onToggle,
   onSaved,
+  onProgress,
   onReload,
   onDirtyChange,
 }: ApplicationCardProps) {
@@ -131,7 +139,11 @@ export default function ApplicationCard({
       if (!statusEdited) setStatus(result.item.status);
       if (!noteEdited) setNote(result.item.operatorNote);
       if (!updatesEdited) setUpdatesApproved(result.item.updatesApproved);
-      setMessage(edited ? copy.savedWithPending : copy.saved);
+      // Turning updates on sent the approval mail before the answer came back: say how it went.
+      const mail = patch.updatesApproved === true ? result.item.approvalMail : null;
+      setMessage(
+        edited ? copy.savedWithPending : mail ? copy.savedWithMail(APPROVAL_MAIL_STATUS_LABEL[mail.status]) : copy.saved,
+      );
       onSaved(result.item, edited);
       return;
     }
@@ -165,6 +177,28 @@ export default function ApplicationCard({
     saveButton.current?.focus();
   }
 
+  // A mail or link action answers with the request as stored then: only its progress is taken, into the row as
+  // it is when the answer lands, so a save that ended meanwhile (a withdrawal, say) stays as saved.
+  const applyProgress = (read: AdminApplication) =>
+    onProgress ? onProgress(item.id, read) : onSaved(mergeProgress(item, read), dirty);
+
+  // One link change at a time on this card (see LinkLock). A ref, so two presses in one frame can't both get it.
+  const linkTaken = useRef(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const linkLock: LinkLock = {
+    busy: linkBusy,
+    acquire() {
+      if (linkTaken.current) return false;
+      linkTaken.current = true;
+      setLinkBusy(true);
+      return true;
+    },
+    release() {
+      linkTaken.current = false;
+      setLinkBusy(false);
+    },
+  };
+
   const noteDescribedBy = [`${id}-note-hint`, `${id}-note-count`, noteMessage && `${id}-note-error`]
     .filter(Boolean)
     .join(" ");
@@ -196,6 +230,7 @@ export default function ApplicationCard({
                 {copy.updatesApprovedBadge}
               </span>
             )}
+            {item.updatesApproved && <ApprovalMailBadge mail={item.approvalMail} />}
           </div>
           <button
             type="button"
@@ -257,8 +292,10 @@ export default function ApplicationCard({
           </p>
         </fieldset>
 
+        <ApprovalMailPanel item={item} onItem={applyProgress} onReload={onReload} lock={linkLock} />
+
         {/* Only for an approval that is saved: the server checks the stored one. */}
-        {item.updatesApproved && <InstallLinkPanel item={item} />}
+        {item.updatesApproved && <InstallLinkPanel item={item} onItem={applyProgress} lock={linkLock} />}
 
         <div>
           <label htmlFor={`${id}-note`} className="text-sm font-medium text-fg">

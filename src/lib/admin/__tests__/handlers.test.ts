@@ -22,6 +22,9 @@ const ITEM: AdminApplication = {
   lastContactedAt: null,
   updatedAt: "2026-11-19T00:00:00.000Z",
   updatesApproved: false,
+  macRegistered: false,
+  latestCodeMail: null,
+  approvalMail: null,
 };
 
 function fakeStore(overrides: Partial<AdminApplicationsStore> = {}) {
@@ -33,7 +36,9 @@ function fakeStore(overrides: Partial<AdminApplicationsStore> = {}) {
     update: vi.fn<(id: string, params: UpdateParams) => ReturnType<AdminApplicationsStore["update"]>>(async () => ({
       kind: "updated",
       item: ITEM,
+      approvalMailId: null,
     })),
+    get: vi.fn<(id: string) => ReturnType<AdminApplicationsStore["get"]>>(async () => ITEM),
     ...overrides,
   };
 }
@@ -43,6 +48,7 @@ function options(store: AdminApplicationsStore | null, session = ADMIN): AdminHa
     getAdminSession: async () => session,
     getStore: () => store,
     getAllowedOrigin: () => ORIGIN,
+    getApprovalMail: () => null,
   };
 }
 

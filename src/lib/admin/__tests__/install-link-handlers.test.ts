@@ -22,6 +22,7 @@ function fakeLinks(issue: IssueOutcome = ISSUED, revoke: RevokeOutcome = { kind:
     revoke: vi.fn<InstallLinkStore["revoke"]>(async () => revoke),
     exchange: vi.fn<InstallLinkStore["exchange"]>(),
     resolveSession: vi.fn<InstallLinkStore["resolveSession"]>(),
+    startTransfer: vi.fn<InstallLinkStore["startTransfer"]>(),
     recordDownload: vi.fn<InstallLinkStore["recordDownload"]>(),
   };
 }
@@ -68,6 +69,48 @@ afterEach(() => {
   // The link secret is in the issuing response only, never in logs.
   expect(JSON.stringify(logs.flatMap((spy) => spy.mock.calls))).not.toContain(TOKEN);
   vi.restoreAllMocks();
+});
+
+describe("admin install link API: the request after a change", () => {
+  const STORED = {
+    id: "7",
+    name: "QA 링크",
+    email: "nokka-install-link-qa@example.com",
+    createdAt: "2026-11-19T00:00:00.000Z",
+    status: "new" as const,
+    operatorNote: "",
+    lastContactedAt: null,
+    updatedAt: "2026-11-19T00:00:00.000Z",
+    updatesApproved: true,
+    macRegistered: false,
+    latestCodeMail: null,
+    approvalMail: null,
+  };
+  const withStore = (get: () => Promise<typeof STORED | null>) =>
+    createInstallLinkHandlers({
+      getAdminSession: async () => ADMIN,
+      getAllowedOrigin: () => ORIGIN,
+      getLinkStore: () => fakeLinks(),
+      getStore: () => ({ search: vi.fn(), update: vi.fn(), get: vi.fn(get) }),
+      newToken: () => TOKEN,
+    });
+
+  it("answers with the request as stored after issuing or revoking, so the card shows a cancelled mail", async () => {
+    const issued = await (await withStore(async () => STORED).POST(request("POST"), params())).json();
+    expect(issued.item).toEqual(STORED);
+    // The link's address is in `link` only.
+    expect(JSON.stringify(issued.item)).not.toContain(TOKEN);
+    const revoked = await (await withStore(async () => STORED).DELETE(request("DELETE"), params())).json();
+    expect(revoked).toEqual({ ok: true, revoked: 1, item: STORED });
+  });
+
+  it("still answers when the request can not be read back", async () => {
+    const response = await withStore(async () => {
+      throw Object.assign(new Error("lost"), { code: "ECONNRESET" });
+    }).POST(request("POST"), params());
+    expect(response.status).toBe(201);
+    expect((await response.json()).item).toBeUndefined();
+  });
 });
 
 describe("admin install link API", () => {

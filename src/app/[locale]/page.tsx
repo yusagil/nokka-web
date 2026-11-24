@@ -33,7 +33,7 @@ export default async function Home({
         <FilesExport dict={dict.files} />
         <FeaturesGrid dict={dict.features} />
         <Requirements dict={dict.requirements} />
-        <ApplicationSection dict={dict.apply} />
+        <ApplicationSection dict={dict.apply} locale={locale} />
       </main>
       <Footer dict={dict.footer} />
     </>

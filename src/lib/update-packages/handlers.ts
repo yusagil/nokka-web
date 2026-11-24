@@ -109,6 +109,9 @@ export function createPackageHandlers(options: PackageHandlerOptions = {}) {
   return { GET: handle("GET"), HEAD: handle("HEAD") };
 }
 
+/** The answer to a request whose client went away before anything was sent (as proxies log it). */
+export const CLIENT_GONE_STATUS = 499;
+
 export type PackageResponder = {
   /** Sent with every answer, including 304, 416 and the bytes. */
   headers: Record<string, string>;
@@ -116,6 +119,18 @@ export type PackageResponder = {
   unavailable: (reason: string, error?: unknown) => Response;
   /** Called once a GET is about to send bytes. */
   onStream?: () => Promise<void>;
+  /**
+   * Only the whole package, sent at most once: no answer advertises ranges, and a GET with a satisfiable range
+   * gets the whole file (200). A range that is not satisfiable as sent (also behind an `If-Range` that no longer
+   * matches, which would otherwise ask for the whole file) is refused (416) before anything is decided.
+   */
+  wholeOnly?: boolean;
+  /**
+   * Called once a GET has its first bytes ready, before the status line, unless its client already went away
+   * (`request.signal`; then nothing is decided): a Response refuses the request instead, and so does an error
+   * (503). Either way the prepared bytes are dropped and none is sent.
+   */
+  beforeStream?: () => Promise<Response | null>;
 };
 
 /** The whole package or one byte range of it, with validators, after access was checked. */
@@ -128,27 +143,27 @@ export async function respondWithPackage(
 ): Promise<Response> {
   const etag = `"${info.sha256Hex}"`;
   const size = info.byteLength;
-  const common = { ...responder.headers, "Accept-Ranges": "bytes", ETag: etag };
+  const common = { ...responder.headers, "Accept-Ranges": responder.wholeOnly ? "none" : "bytes", ETag: etag };
   if (matchesIfNoneMatch(request.headers.get("if-none-match"), etag)) {
     return new Response(null, { status: 304, headers: common });
   }
 
-  const rangeHeader = rangeStillValid(request.headers.get("if-range"), etag)
-    ? request.headers.get("range")
-    : null;
+  const asked = request.headers.get("range");
+  const rangeHeader = responder.wholeOnly || rangeStillValid(request.headers.get("if-range"), etag) ? asked : null;
   // HEAD describes the whole file, as GET without a range would.
   const requested = method === "HEAD" ? { kind: "full" as const } : parseRange(rangeHeader, size);
   if (requested.kind === "unsatisfiable") {
     return responder.refuse(416, "RANGE_NOT_SATISFIABLE", { "Content-Range": `bytes */${size}` });
   }
-  const range = requested.kind === "partial" ? requested.range : { start: 0, end: size - 1 };
+  const partial = requested.kind === "partial" && !responder.wholeOnly;
+  const range = requested.kind === "partial" && partial ? requested.range : { start: 0, end: size - 1 };
   const headers: Record<string, string> = {
     ...common,
     "Content-Type": PACKAGE_CONTENT_TYPE,
     "Content-Length": String(range.end - range.start + 1),
   };
-  if (requested.kind === "partial") headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
-  const status = requested.kind === "partial" ? 206 : 200;
+  if (partial) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${size}`;
+  const status = partial ? 206 : 200;
   if (method === "HEAD") return new Response(null, { status, headers });
 
   // The first chunk is read before the status line is sent, so a database outage is a 503, not a
@@ -158,6 +173,24 @@ export async function respondWithPackage(
     stream = await streamRange(store, info, range);
   } catch (error) {
     return responder.unavailable("package read failed", error);
+  }
+  if (responder.beforeStream) {
+    // Nobody would read it: the answer only tells the logs why nothing was sent.
+    if (request.signal.aborted) {
+      await stream.cancel().catch(() => {});
+      return new Response(null, { status: CLIENT_GONE_STATUS, headers: responder.headers });
+    }
+    let refusal: Response | null;
+    try {
+      refusal = await responder.beforeStream();
+    } catch (error) {
+      await stream.cancel().catch(() => {});
+      return responder.unavailable("transfer was not started", error);
+    }
+    if (refusal) {
+      await stream.cancel().catch(() => {});
+      return refusal;
+    }
   }
   await responder.onStream?.();
   return new Response(stream, { status, headers });

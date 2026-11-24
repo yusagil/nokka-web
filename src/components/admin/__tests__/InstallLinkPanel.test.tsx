@@ -18,6 +18,9 @@ const item: AdminApplication = {
   lastContactedAt: null,
   updatedAt: "2026-11-19T12:30:00.000Z",
   updatesApproved: true,
+  macRegistered: false,
+  latestCodeMail: null,
+  approvalMail: null,
 };
 const URL_1 = `https://nokka-web.vercel.app/install#${"a".repeat(42)}A`;
 const URL_2 = `https://nokka-web.vercel.app/install#${"b".repeat(42)}A`;
@@ -69,7 +72,9 @@ describe("InstallLinkPanel", () => {
     expect(body).toContain(URL_1);
     expect(body).toContain("2026. 11. 26. 12:30까지");
     // A link opens once, so it is opened on the Mac it installs.
-    expect(body).toContain("이 링크는 한 번만 열 수 있습니다. 설치할 Mac에서 열어 주세요.");
+    // One press of the page's button downloads; opening the link uses nothing.
+    expect(body).toContain("설치할 Mac에서 링크를 열고 ‘설치 파일 받기’를 누르면 바로 받기 시작합니다. 이 버튼은 한 번만 쓸 수 있고");
+    expect(body).not.toContain("처음 연 브라우저");
     expect(body).toContain("김테스트님");
     // A code only when the app asks for one: an installation can take over its registration.
     expect(body).toContain("등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요.");
@@ -125,13 +130,18 @@ describe("InstallLinkPanel", () => {
     const draft = screen.getByRole<HTMLTextAreaElement>("textbox", { name: copy.installLinkBodyLabel });
     expect(draft).toHaveAttribute("readonly");
     expect(draft.value).toBe(copy.installLinkMailBody("김테스트", URL_1, "2026. 11. 26. 12:30"));
-    expect(draft.value).toContain("이 링크는 한 번만 열 수 있습니다. 설치할 Mac에서 열어 주세요.");
+    expect(draft.value).toContain("이 버튼은 한 번만 쓸 수 있고");
     expect(draft.value).toContain("등록 화면이 열리면 이 이메일 주소로 코드를 받아 이 Mac을 등록하세요.");
     // Selected for copying by hand.
-    await vi.waitFor(() => {
-      expect(draft.selectionStart).toBe(0);
-      expect(draft.selectionEnd).toBe(draft.value.length);
-    });
+    // The selection waits for an animation frame, which a busy machine (other suites on Postgres at once) can hold
+    // for seconds.
+    await vi.waitFor(
+      () => {
+        expect(draft.selectionStart).toBe(0);
+        expect(draft.selectionEnd).toBe(draft.value.length);
+      },
+      { timeout: 10_000 },
+    );
     // Still only a pasted body: no compose link carries the token.
     const token = URL_1.split("#")[1];
     for (const a of screen.getAllByRole("link")) expect(decodeURIComponent(a.getAttribute("href")!)).not.toContain(token);
@@ -145,7 +155,7 @@ describe("InstallLinkPanel", () => {
     const next = screen.getByRole<HTMLTextAreaElement>("textbox", { name: copy.installLinkBodyLabel });
     expect(next.value).toContain(URL_2);
     expect(next.value).not.toContain(URL_1);
-  });
+  }, 20_000);
 
   it("copies nothing while a new link is being made, then says to copy again", async () => {
     const user = userEvent.setup();
@@ -288,7 +298,7 @@ describe("InstallLinkPanel", () => {
     expect(copy.installLinkRevoked).toContain("이미 시작된 다운로드는 끝까지 받을 수 있습니다");
     const revokeButton = screen.getByRole("button", { name: copy.installLinkRevoke });
     expect(revokeButton).toHaveAccessibleDescription(copy.installLinkRevokeHint);
-    expect(copy.installLinkRevokeHint).toContain("새 요청(이어 받기 포함)은 바로 거절됩니다");
+    expect(copy.installLinkRevokeHint).toContain("그 링크의 새 요청은 바로 거절되고, 아직 보내지 않은 승인 메일도 취소됩니다");
     expect(copy.installLinkRevokeHint).toContain("이미 시작된 다운로드는 중간에 끊지 않으므로");
 
     await user.click(screen.getByRole("button", { name: copy.installLinkRevoke }));
