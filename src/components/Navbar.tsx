@@ -4,16 +4,19 @@ import type { Dictionary, Locale } from "@/dictionaries";
 interface NavbarProps {
   dict: Dictionary["nav"];
   locale: Locale;
+  /** The page after the locale (e.g. "/updates"); empty on the home page. Elsewhere the section links lead home. */
+  path?: string;
 }
 
 const LOCALE_LABELS: Record<Locale, string> = { en: "EN", ko: "한국어" };
 
-export default function Navbar({ dict, locale }: NavbarProps) {
+export default function Navbar({ dict, locale, path = "" }: NavbarProps) {
   const otherLocale: Locale = locale === "en" ? "ko" : "en";
+  const home = path ? `/${locale}` : "";
   const links = [
-    { href: "#how", label: dict.how },
-    { href: "#privacy", label: dict.privacy },
-    { href: "#requirements", label: dict.requirements },
+    { href: `${home}#how`, label: dict.how },
+    { href: `${home}#privacy`, label: dict.privacy },
+    { href: `${home}#requirements`, label: dict.requirements },
   ];
 
   return (
@@ -49,7 +52,7 @@ export default function Navbar({ dict, locale }: NavbarProps) {
               |
             </span>
             <a
-              href={`/${otherLocale}`}
+              href={`/${otherLocale}${path}`}
               lang={otherLocale}
               hrefLang={otherLocale}
               className="inline-flex min-h-11 items-center px-1 text-fg-subtle transition-colors duration-100 hover:text-fg"
@@ -59,7 +62,7 @@ export default function Navbar({ dict, locale }: NavbarProps) {
           </div>
           {/* Desktop only: on phones the hero button is the way in. */}
           <a
-            href="#apply"
+            href={`${home}#apply`}
             className="hidden h-11 items-center rounded-full bg-accent-strong px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-accent-stronger md:inline-flex"
           >
             {dict.apply}

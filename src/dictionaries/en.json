@@ -232,6 +232,71 @@
       }
     }
   },
+  "updates": {
+    "meta": {
+      "title": "Nokka updates — get them in the app on a registered Mac",
+      "description": "Nokka updates now arrive inside the app on a registered Mac. How to register a Mac with a one-time code sent to your request email, and what to do after reinstalling Nokka or switching Macs."
+    },
+    "eyebrow": "Update notice",
+    "heading": "Nokka updates are changing",
+    "intro": "From now on, Nokka updates arrive inside the app on a Mac you register. There is no public installer. Without registering, you can keep using the version you have.",
+    "check": {
+      "heading": "Start with the update window",
+      "intro": "The app's interface is in Korean; its labels are quoted below with a translation. In the Nokka menu, choose ‘업데이트 확인…’ (Check for Updates), then follow what you see.",
+      "cases": [
+        {
+          "term": "Only a notice",
+          "detail": "Keep the app you have and don't delete it. When an update for this app is ready, the same window offers to install it. Older versions may not offer one; if so, see “If you need an installer” below."
+        },
+        {
+          "term": "An update to install",
+          "detail": "Install it, open Nokka again, then register this Mac with the steps below."
+        },
+        {
+          "term": "The registration screen",
+          "detail": "Your version can register. Follow the steps below."
+        }
+      ]
+    },
+    "register": {
+      "heading": "Register this Mac",
+      "steps": [
+        "In the Nokka menu, choose ‘업데이트 확인…’ (Check for Updates). If this Mac isn't registered, the registration screen opens. You can also open it with ‘등록…’ (Register) under ‘업데이트 등록’ (Update registration) in Settings › General.",
+        "Enter the email you used for your access request and click ‘코드 받기’ (Get code).",
+        "If the team has approved updates for that request email, an 8-digit one-time code arrives by email. It works once, in the app on the Mac that asked for it, until the time the app shows.",
+        "Enter the code in that same app and click ‘등록’ (Register). When you see ‘이 Mac에 등록됨’ (Registered on this Mac), registration is done. Automatic checks and ‘업데이트 확인…’ then work without a code."
+      ],
+      "notesHeading": "If no code arrives or it expired",
+      "notes": [
+        "Check your spam folder. No code is sent to an email without an access request, or whose updates have not been approved yet.",
+        "If the code has expired, click ‘새 코드 받기’ (Get a new code).",
+        "Don't share the code. Don't post your email address or a code in public forums or contact posts."
+      ]
+    },
+    "change": {
+      "heading": "Reinstalled Nokka or switched Macs?",
+      "items": [
+        "One email registers one Mac.",
+        "In the reinstalled app or on the new Mac, get a new code and register again with the steps above. A code that was used can't be used again.",
+        "The exception is when a registered Nokka quit to install an update and the installation didn't finish. Installing that update yourself in the old app's location on this Mac, before you open the old app again, can keep the registration. If ‘업데이트 확인…’ (Check for Updates) then shows the registration screen, get a new code and register with the steps above.",
+        "Your earlier registration stays until the new one is done. After that, the earlier Mac or the earlier installation no longer receives updates.",
+        "An app whose registration ended keeps working on the version it has."
+      ]
+    },
+    "installer": {
+      "heading": "If you need an installer",
+      "body": [
+        "For example, no update is offered to install, the update failed, or you need to install Nokka fresh. If you still have the app, keep using it and don't delete it.",
+        "There is no public installer. Users whose updates are approved receive a private installer link, valid for a limited time, separately. This page has no installer or installer link.",
+        "Use the link you receive before it expires, and don't share it. After installing, if ‘업데이트 확인…’ (Check for Updates) shows the registration screen, register this Mac with the steps above to get later updates in the app."
+      ]
+    },
+    "apply": {
+      "heading": "Haven't requested access yet?",
+      "body": "Registration codes go only to request emails whose updates the team has approved. Request access first.",
+      "link": "Request access"
+    }
+  },
   "footer": {
     "copyright": "© 2026 Nokka",
     "contact": "Contact (GitHub)",
